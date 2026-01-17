@@ -1,3 +1,4 @@
+
 export enum Category {
   JOB_POSTING = 'JOB_POSTING',
   JOB_SEEKING = 'JOB_SEEKING',

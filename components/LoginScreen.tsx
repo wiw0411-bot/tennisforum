@@ -1,26 +1,23 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { auth, db } from '../firebase';
 import { 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword,
-  GoogleAuthProvider,
-  signInWithPopup,
+  sendEmailVerification,
   User as FirebaseUser,
 } from 'firebase/auth';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { User } from '../types';
 
-import GoogleIcon from './icons/GoogleIcon';
 import { loginBackgroundImage } from '../assets/imageAssets';
 
 interface LoginScreenProps {
-  onAdminLogin: () => void;
-  onSignUpSuccess: (user: FirebaseUser, phone: string) => void;
   onShowPrivacyPolicy: () => void;
   onShowTerms: () => void;
 }
 
-const LoginScreen: React.FC<LoginScreenProps> = ({ onAdminLogin, onSignUpSuccess, onShowPrivacyPolicy, onShowTerms }) => {
+const LoginScreen: React.FC<LoginScreenProps> = ({ onShowPrivacyPolicy, onShowTerms }) => {
   const [isLoginView, setIsLoginView] = useState(true);
   
   // Common fields
@@ -80,8 +77,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onAdminLogin, onSignUpSuccess
   const isSignUpFormValid = useMemo(() => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const isEmailValid = emailRegex.test(email);
-    const isPhoneValid = phone.length === 11;
-
     return isEmailValid && phone && password && passwordConfirm && nickname && Object.keys(errors).length === 0;
   }, [email, password, passwordConfirm, nickname, phone, errors]);
 
@@ -98,7 +93,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onAdminLogin, onSignUpSuccess
               phone: additionalData.phone,
               role: 'user',
               createdAt,
-              phoneVerified: false,
               ...(photoURL && { avatarUrl: photoURL }),
           };
           try {
@@ -119,7 +113,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onAdminLogin, onSignUpSuccess
       try {
         await signInWithEmailAndPassword(auth, email, password);
       } catch (err: any) {
-        setApiError('이메일 또는 비밀번호가 잘못되었습니다.');
+        if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+            setApiError('이메일 또는 비밀번호가 잘못되었습니다.');
+        } else {
+            setApiError('로그인에 실패했습니다. 잠시 후 다시 시도해주세요.');
+        }
       }
     } else { // Sign Up
       if (!isSignUpFormValid) {
@@ -129,7 +127,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onAdminLogin, onSignUpSuccess
       try {
         const { user } = await createUserWithEmailAndPassword(auth, email, password);
         await createUserProfileDocument(user, { name: nickname, phone });
-        onSignUpSuccess(user, phone);
+        await sendEmailVerification(user);
+        // After this, the onAuthStateChanged listener in App.tsx will detect the new unverified user.
       } catch (err: any) {
          if (err.code === 'auth/email-already-in-use') {
           setApiError('이미 사용 중인 이메일입니다.');
@@ -137,22 +136,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onAdminLogin, onSignUpSuccess
           setApiError('회원가입에 실패했습니다. 다시 시도해주세요.');
         }
       }
-    }
-  };
-  
-  const handleGoogleSignIn = async () => {
-    setApiError('');
-    const provider = new GoogleAuthProvider();
-    try {
-        const { user } = await signInWithPopup(auth, provider);
-        const userRef = doc(db, 'users', user.uid);
-        const snapshot = await getDoc(userRef);
-        if (!snapshot.exists()) {
-            await createUserProfileDocument(user, { name: user.displayName || 'Google 사용자', phone: '' });
-        }
-    } catch(err) {
-        setApiError('구글 로그인에 실패했습니다.');
-        console.error(err);
     }
   };
 
@@ -187,21 +170,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onAdminLogin, onSignUpSuccess
       <button onClick={() => { setIsLoginView(false); setApiError(''); }} className="w-full mt-2 text-xs text-center font-semibold text-[#ff5710] hover:underline">
           계정이 없으신가요? 회원가입
       </button>
-      <div className="my-4 flex items-center">
-          <div className="flex-grow border-t border-gray-200"></div>
-          <span className="flex-shrink mx-2 text-xs text-gray-400">또는</span>
-          <div className="flex-grow border-t border-gray-200"></div>
-      </div>
-
-      <div className="w-full space-y-3">
-          <button
-              onClick={handleGoogleSignIn}
-              className="w-full h-12 flex items-center justify-center rounded-xl bg-white border border-gray-300 text-gray-700 font-medium text-sm transition-transform active:scale-95 hover:bg-gray-50"
-          >
-              <GoogleIcon className="w-5 h-5 mr-2" />
-              Google 계정으로 계속하기
-          </button>
-      </div>
     </>
   );
   
@@ -234,7 +202,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onAdminLogin, onSignUpSuccess
                 disabled={!isSignUpFormValid}
                 className="w-full h-12 flex items-center justify-center rounded-xl bg-[#ff5710] text-white font-semibold text-sm transition-transform active:scale-95 disabled:bg-[#ffc2aa] disabled:cursor-not-allowed"
             >
-              가입하기
+              가입하고 인증하기
             </button>
           </div>
       </form>
@@ -254,14 +222,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onAdminLogin, onSignUpSuccess
       <div className="bg-white px-8 pb-8 pt-6 rounded-t-2xl -mt-4 z-10">
         {isLoginView ? renderLoginView() : renderSignUpView()}
         
-        <button
-            onClick={onAdminLogin}
-            className="w-full mt-4 h-12 flex items-center justify-center text-gray-500 font-medium text-sm hover:text-[#ff5710]"
-        >
-            관리자모드로 로그인
-        </button>
-
-        <p className="text-center text-[9px] text-gray-400 mt-6">
+        <p className="text-center text-[9px] text-gray-400 mt-6 pt-10">
           로그인 시 서비스{' '}
           <button onClick={onShowTerms} className="font-semibold underline">
               이용약관

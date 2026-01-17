@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Post, Category, Comment, Announcement, User, Notification, NotificationType, Advertisement } from './types';
 import { CATEGORIES } from './constants';
@@ -7,7 +8,6 @@ import PostDetail from './components/PostDetail';
 import PostForm from './components/PostForm';
 import BottomNav from './components/BottomNav';
 import LoginScreen from './components/LoginScreen';
-import PhoneVerificationScreen from './components/PhoneVerificationScreen';
 import PrivacyPolicy from './components/PrivacyPolicy';
 import TermsOfService from './components/TermsOfService';
 import MyInfoScreen from './components/MyInfoScreen';
@@ -23,12 +23,13 @@ import CreatePostButton from './components/CreatePostButton';
 import HomeScreen from './components/HomeScreen';
 import ArrowLeftIcon from './components/icons/ArrowLeftIcon';
 import AdBanner from './components/AdBanner';
+import EmailVerificationScreen from './components/EmailVerificationScreen';
 import { db, auth } from './firebase'; 
 import { collection, getDocs, Timestamp, addDoc, serverTimestamp, doc, deleteDoc, updateDoc, setDoc, getDoc } from 'firebase/firestore'; 
-import { onAuthStateChanged, signOut, User as FirebaseUser, deleteUser } from 'firebase/auth';
+import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
 
 
-const MOCK_ADMIN: User = { id: 'admin001', name: '관리자', role: 'admin', createdAt: '2024-12-01T09:00:00Z' };
+const ADMIN_EMAIL = 'admin@tennisforum.ai.kr';
 
 const handleFirestoreError = (error: any, context: string) => {
     console.error(`Firestore error (${context}):`, error);
@@ -43,11 +44,10 @@ const App: React.FC = () => {
   const [showSplashScreen, setShowSplashScreen] = useState(true);
 
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isAdminView, setIsAdminView] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
-  const [authView, setAuthView] = useState<'login' | 'verifyPhone'>('login');
-  const [userForVerification, setUserForVerification] = useState<{ user: FirebaseUser; phone: string } | null>(null);
+  const [pendingVerification, setPendingVerification] = useState(false);
+  const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
 
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [advertisements, setAdvertisements] = useState<Advertisement[]>([]);
@@ -68,57 +68,70 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (userAuth) => {
-      if (authView === 'verifyPhone') {
-          setIsAuthLoading(false);
-          return;
-      }
-
       if (userAuth) {
-        const userRef = doc(db, 'users', userAuth.uid);
-        const snapshot = await getDoc(userRef);
-
-        if (snapshot.exists()) {
-          setCurrentUser({ id: snapshot.id, ...snapshot.data() } as User);
-          setIsAuthenticated(true);
+        if (!userAuth.emailVerified) {
+            setVerificationEmail(userAuth.email);
+            setPendingVerification(true);
+            setIsAuthenticated(false);
+            setCurrentUser(null);
         } else {
-          const isSocialLogin = userAuth.providerData.some(
-            (provider) => provider.providerId !== 'password'
-          );
+            setPendingVerification(false);
+            setVerificationEmail(null);
 
-          if (isSocialLogin) {
-            const { displayName, email, photoURL } = userAuth;
-            const newUser: Omit<User, 'id'> = {
-              name: displayName || email?.split('@')[0] || '새 사용자',
-              role: 'user',
-              createdAt: new Date().toISOString(),
-              ...(photoURL && { avatarUrl: photoURL }),
-            };
-            try {
-              await setDoc(userRef, newUser);
-              setCurrentUser({ id: userAuth.uid, ...newUser });
+            const userRef = doc(db, 'users', userAuth.uid);
+            const snapshot = await getDoc(userRef);
+
+            if (snapshot.exists()) {
+              const userForState = { id: snapshot.id, ...snapshot.data() } as User;
+              if (userAuth.email === ADMIN_EMAIL) {
+                userForState.role = 'admin';
+              }
+              setCurrentUser(userForState);
               setIsAuthenticated(true);
-            } catch (error) {
-               handleFirestoreError(error, "소셜 로그인 사용자 프로필 생성");
-               setCurrentUser(null);
-               setIsAuthenticated(false);
+            } else {
+              const isSocialLogin = userAuth.providerData.some(
+                (provider) => provider.providerId !== 'password'
+              );
+
+              if (isSocialLogin) {
+                const { displayName, email, photoURL } = userAuth;
+                const newUser: Omit<User, 'id'> = {
+                  name: displayName || email?.split('@')[0] || '새 사용자',
+                  role: 'user',
+                  createdAt: new Date().toISOString(),
+                  ...(photoURL && { avatarUrl: photoURL }),
+                };
+                try {
+                  await setDoc(userRef, newUser);
+                  const userForState = { id: userAuth.uid, ...newUser } as User;
+                   if (userAuth.email === ADMIN_EMAIL) {
+                    userForState.role = 'admin';
+                  }
+                  setCurrentUser(userForState);
+                  setIsAuthenticated(true);
+                } catch (error) {
+                   handleFirestoreError(error, "소셜 로그인 사용자 프로필 생성");
+                   setCurrentUser(null);
+                   setIsAuthenticated(false);
+                }
+              }
             }
-          }
-          // For new email/password signups, the profile is created in LoginScreen.
-          // Do nothing here to prevent race conditions.
         }
       } else {
+        setPendingVerification(false);
+        setVerificationEmail(null);
         setCurrentUser(null);
         setIsAuthenticated(false);
-        clearData(); // Clear data on logout
+        clearData();
       }
       setIsAuthLoading(false);
     });
     return () => unsubscribe();
-  }, [authView]);
+  }, []);
 
   useEffect(() => {
     const fetchAllData = async () => {
-        if (!currentUser) return; // Only fetch if user is logged in
+        if (!currentUser) return;
 
         setIsDataLoading(true);
         try {
@@ -175,42 +188,6 @@ const App: React.FC = () => {
       setIsDataLoading(false);
     }
   }, [currentUser]);
-
-
-  const handleSignUpSuccess = (user: FirebaseUser, phone: string) => {
-    setUserForVerification({ user, phone });
-    setAuthView('verifyPhone');
-  };
-
-  const handleVerificationSuccess = async () => {
-    if (!userForVerification) return;
-    const userRef = doc(db, 'users', userForVerification.user.uid);
-    try {
-        await updateDoc(userRef, { phoneVerified: true });
-        const snapshot = await getDoc(userRef);
-        if(snapshot.exists()){
-            setCurrentUser({ id: snapshot.id, ...snapshot.data() } as User);
-            setIsAuthenticated(true);
-        }
-        setAuthView('login');
-        setUserForVerification(null);
-    } catch(error) {
-        handleFirestoreError(error, "휴대폰 인증 상태 업데이트");
-    }
-  };
-
-  const handleVerificationCancel = async () => {
-    if (userForVerification) {
-        try {
-            await deleteUser(userForVerification.user);
-        } catch (error) {
-            console.error("Failed to delete unverified user", error);
-            await signOut(auth);
-        }
-    }
-    setAuthView('login');
-    setUserForVerification(null);
-  };
 
   const [viewingPrivacyPolicy, setViewingPrivacyPolicy] = useState(false);
   const [viewingTerms, setViewingTerms] = useState(false);
@@ -280,24 +257,12 @@ const App: React.FC = () => {
   const myPosts = useMemo(() => postsWithBookmarks.filter(p => currentUser && p.authorId === currentUser.id), [postsWithBookmarks, currentUser]);
   const bookmarkedPosts = useMemo(() => postsWithBookmarks.filter(p => p.isBookmarked), [postsWithBookmarks]);
 
-  const handleAdminLogin = useCallback(() => {
-    setIsAdminView(true);
-    setCurrentUser(MOCK_ADMIN);
-    setIsAuthenticated(true);
-  }, []);
-
   const handleLogout = useCallback(async () => {
-    if (isAdminView) {
-        setIsAdminView(false);
-        setCurrentUser(null);
-        setIsAuthenticated(false);
-    } else {
-        await signOut(auth);
-    }
+    await signOut(auth);
     setActiveTab('home');
     setHomeView('dashboard');
     setCurrentScreen('list');
-  }, [isAdminView]);
+  }, []);
 
   const handleShowPrivacyPolicy = useCallback(() => setViewingPrivacyPolicy(true), []);
   const handleHidePrivacyPolicy = useCallback(() => setViewingPrivacyPolicy(false), []);
@@ -727,14 +692,15 @@ const App: React.FC = () => {
      return <div className="bg-white h-full font-sans w-full max-w-md mx-auto flex flex-col overflow-hidden border border-gray-100 shadow-lg relative"><div className="flex h-full items-center justify-center"><p>인증 정보를 확인하는 중...</p></div></div>;
   }
   
+  if (pendingVerification) {
+    return <EmailVerificationScreen email={verificationEmail} onBackToLogin={() => signOut(auth)} />;
+  }
+
   if (!isAuthenticated) {
-    if (authView === 'verifyPhone' && userForVerification) {
-      return <PhoneVerificationScreen phone={userForVerification.phone} onVerify={handleVerificationSuccess} onBack={handleVerificationCancel} />;
-    }
-    return <LoginScreen onAdminLogin={handleAdminLogin} onSignUpSuccess={handleSignUpSuccess} onShowPrivacyPolicy={handleShowPrivacyPolicy} onShowTerms={handleShowTerms} />;
+    return <LoginScreen onShowPrivacyPolicy={handleShowPrivacyPolicy} onShowTerms={handleShowTerms} />;
   }
   
-  if (isAdminView) {
+  if (currentUser?.role === 'admin') {
       return <AdminPanel 
                 currentUser={currentUser} 
                 users={users} 
