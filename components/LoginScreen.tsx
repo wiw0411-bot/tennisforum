@@ -96,10 +96,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onAdminLogin, onSignUpSuccess
           const newUser: Omit<User, 'id'> = {
               name: additionalData.name,
               phone: additionalData.phone,
-              avatarUrl: photoURL || undefined,
               role: 'user',
               createdAt,
               phoneVerified: false,
+              ...(photoURL && { avatarUrl: photoURL }),
           };
           try {
               await setDoc(userRef, newUser);

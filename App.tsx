@@ -81,22 +81,30 @@ const App: React.FC = () => {
           setCurrentUser({ id: snapshot.id, ...snapshot.data() } as User);
           setIsAuthenticated(true);
         } else {
-          const { displayName, email, photoURL } = userAuth;
-          const newUser: Omit<User, 'id'> = {
-            name: displayName || email?.split('@')[0] || '새 사용자',
-            avatarUrl: photoURL || undefined,
-            role: 'user',
-            createdAt: new Date().toISOString(),
-          };
-          try {
-            await setDoc(userRef, newUser);
-            setCurrentUser({ id: userAuth.uid, ...newUser });
-            setIsAuthenticated(true);
-          } catch (error) {
-             handleFirestoreError(error, "소셜 로그인 사용자 프로필 생성");
-             setCurrentUser(null);
-             setIsAuthenticated(false);
+          const isSocialLogin = userAuth.providerData.some(
+            (provider) => provider.providerId !== 'password'
+          );
+
+          if (isSocialLogin) {
+            const { displayName, email, photoURL } = userAuth;
+            const newUser: Omit<User, 'id'> = {
+              name: displayName || email?.split('@')[0] || '새 사용자',
+              role: 'user',
+              createdAt: new Date().toISOString(),
+              ...(photoURL && { avatarUrl: photoURL }),
+            };
+            try {
+              await setDoc(userRef, newUser);
+              setCurrentUser({ id: userAuth.uid, ...newUser });
+              setIsAuthenticated(true);
+            } catch (error) {
+               handleFirestoreError(error, "소셜 로그인 사용자 프로필 생성");
+               setCurrentUser(null);
+               setIsAuthenticated(false);
+            }
           }
+          // For new email/password signups, the profile is created in LoginScreen.
+          // Do nothing here to prevent race conditions.
         }
       } else {
         setCurrentUser(null);
