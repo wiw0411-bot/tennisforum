@@ -30,18 +30,6 @@ import { onAuthStateChanged, signOut, User as FirebaseUser, deleteUser } from 'f
 
 const MOCK_ADMIN: User = { id: 'admin001', name: '관리자', role: 'admin', createdAt: '2024-12-01T09:00:00Z' };
 
-const MOCK_ANNOUNCEMENTS: Announcement[] = [
-    { id: 'anno1', title: 'TENNIS FORUM 서비스 정식 오픈!', content: '안녕하세요, TENNIS FORUM입니다. 드디어 저희 서비스가 정식으로 오픈되었습니다. 많은 관심과 이용 부탁드립니다. 감사합니다.', createdAt: '2025-01-01T09:00:00Z'},
-    { id: 'anno2', title: '서버 점검 안내 (01/10 02:00 ~ 04:00)', content: '보다 안정적인 서비스 제공을 위해 서버 점검을 실시합니다. 점검 시간 동안 서비스 이용이 일시적으로 중단될 수 있으니 양해 부탁드립니다. \n\n- 점검 일시: 2025년 1월 10일 새벽 2시 ~ 4시 (2시간)\n- 점검 내용: 서버 안정화 및 업데이트', createdAt: '2025-01-08T18:00:00Z'},
-];
-
-const MOCK_ADVERTISEMENTS: Advertisement[] = [
-    { id: 'ad-1', imageUrl: 'https://i.imgur.com/qYWlNXb.png', linkUrl: 'https://www.example.com/ad1', isActive: true, createdAt: '2025-01-05T10:00:00Z' },
-    { id: 'ad-2', imageUrl: 'https://i.imgur.com/iHjjLfw.png', linkUrl: 'https://www.example.com/ad2', isActive: true, createdAt: '2025-01-04T10:00:00Z' },
-    { id: 'ad-3', imageUrl: 'https://i.imgur.com/UGUO3Dp.png', linkUrl: 'https://www.example.com/ad3', isActive: false, createdAt: '2025-01-03T10:00:00Z' },
-    { id: 'ad-4', imageUrl: 'https://i.imgur.com/55H2TFd.png', linkUrl: '', isActive: true, createdAt: '2025-01-02T10:00:00Z' },
-];
-
 const handleFirestoreError = (error: any, context: string) => {
     console.error(`Firestore error (${context}):`, error);
     if (error.code === 'permission-denied') {
@@ -61,9 +49,25 @@ const App: React.FC = () => {
   const [authView, setAuthView] = useState<'login' | 'verifyPhone'>('login');
   const [userForVerification, setUserForVerification] = useState<{ user: FirebaseUser; phone: string } | null>(null);
 
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [advertisements, setAdvertisements] = useState<Advertisement[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [bookmarkedPostIds, setBookmarkedPostIds] = useState<Set<string>>(new Set());
+  
+  // Data loading state
+  const [isDataLoading, setIsDataLoading] = useState(true);
+
+  const clearData = () => {
+      setPosts([]);
+      setAnnouncements([]);
+      setAdvertisements([]);
+      setUsers([]);
+      setBookmarkedPostIds(new Set());
+  }
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (userAuth) => {
-      // Don't handle auth state change while waiting for phone verification
       if (authView === 'verifyPhone') {
           setIsAuthLoading(false);
           return;
@@ -77,9 +81,6 @@ const App: React.FC = () => {
           setCurrentUser({ id: snapshot.id, ...snapshot.data() } as User);
           setIsAuthenticated(true);
         } else {
-          // This case might happen with social logins without a profile doc yet.
-          // The profile creation is now handled primarily during signup flow.
-          // We can create a fallback here.
           const { displayName, email, photoURL } = userAuth;
           const newUser: Omit<User, 'id'> = {
             name: displayName || email?.split('@')[0] || '새 사용자',
@@ -100,11 +101,73 @@ const App: React.FC = () => {
       } else {
         setCurrentUser(null);
         setIsAuthenticated(false);
+        clearData(); // Clear data on logout
       }
       setIsAuthLoading(false);
     });
     return () => unsubscribe();
-  }, [authView]); // Re-run when authView changes
+  }, [authView]);
+
+  useEffect(() => {
+    const fetchAllData = async () => {
+        if (!currentUser) return; // Only fetch if user is logged in
+
+        setIsDataLoading(true);
+        try {
+            const [usersSnapshot, postsSnapshot, announcementsSnapshot, advertisementsSnapshot] = await Promise.all([
+                getDocs(collection(db, 'users')),
+                getDocs(collection(db, 'posts')),
+                getDocs(collection(db, 'announcements')),
+                getDocs(collection(db, 'advertisements')),
+            ]);
+
+            const userList = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+            setUsers(userList);
+
+            const postList = postsSnapshot.docs.map(doc => {
+                const data = doc.data();
+                return { 
+                    id: doc.id, 
+                    ...data, 
+                    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt 
+                } as Post;
+            });
+            setPosts(postList);
+
+            const announcementList = announcementsSnapshot.docs.map(doc => {
+                const data = doc.data();
+                return { 
+                    id: doc.id, 
+                    ...data, 
+                    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt 
+                } as Announcement;
+            });
+            setAnnouncements(announcementList.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+
+            const adList = advertisementsSnapshot.docs.map(doc => {
+                const data = doc.data();
+                return { 
+                    id: doc.id, 
+                    ...data, 
+                    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt 
+                } as Advertisement;
+            });
+            setAdvertisements(adList.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+
+        } catch (error) {
+            handleFirestoreError(error, "데이터 로딩");
+        } finally {
+            setIsDataLoading(false);
+        }
+    };
+    
+    if (currentUser) {
+      fetchAllData();
+    } else {
+      setIsDataLoading(false);
+    }
+  }, [currentUser]);
+
 
   const handleSignUpSuccess = (user: FirebaseUser, phone: string) => {
     setUserForVerification({ user, phone });
@@ -116,7 +179,6 @@ const App: React.FC = () => {
     const userRef = doc(db, 'users', userForVerification.user.uid);
     try {
         await updateDoc(userRef, { phoneVerified: true });
-        // Manually set authenticated state since we bypassed onAuthStateChanged
         const snapshot = await getDoc(userRef);
         if(snapshot.exists()){
             setCurrentUser({ id: snapshot.id, ...snapshot.data() } as User);
@@ -146,67 +208,7 @@ const App: React.FC = () => {
   const [viewingTerms, setViewingTerms] = useState(false);
   const [viewingAnnouncements, setViewingAnnouncements] = useState(false);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
-
-  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
-  const [advertisements, setAdvertisements] = useState<Advertisement[]>([]);
-
-  const [users, setUsers] = useState<User[]>([]);
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [bookmarkedPostIds, setBookmarkedPostIds] = useState<Set<string>>(new Set());
-
-  useEffect(() => {
-    const fetchAllData = async () => {
-        try {
-            const [usersSnapshot, postsSnapshot, announcementsSnapshot, advertisementsSnapshot] = await Promise.all([
-                getDocs(collection(db, 'users')),
-                getDocs(collection(db, 'posts')),
-                getDocs(collection(db, 'announcements')),
-                getDocs(collection(db, 'advertisements')),
-            ]);
-
-            const userList = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
-            setUsers(userList.length > 0 ? userList : [MOCK_ADMIN]);
-
-            const postList = postsSnapshot.docs.map(doc => {
-                const data = doc.data();
-                return { 
-                    id: doc.id, 
-                    ...data, 
-                    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt 
-                } as Post;
-            });
-            setPosts(postList);
-
-            const announcementList = announcementsSnapshot.docs.map(doc => {
-                const data = doc.data();
-                return { 
-                    id: doc.id, 
-                    ...data, 
-                    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt 
-                } as Announcement;
-            });
-            setAnnouncements(announcementList.length > 0 ? announcementList.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) : MOCK_ANNOUNCEMENTS);
-
-            const adList = advertisementsSnapshot.docs.map(doc => {
-                const data = doc.data();
-                return { 
-                    id: doc.id, 
-                    ...data, 
-                    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt 
-                } as Advertisement;
-            });
-            setAdvertisements(adList.length > 0 ? adList.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()) : MOCK_ADVERTISEMENTS);
-
-        } catch (error) {
-            handleFirestoreError(error, "초기 데이터 로딩");
-            setUsers([MOCK_ADMIN]);
-            setAnnouncements(MOCK_ANNOUNCEMENTS);
-            setAdvertisements(MOCK_ADVERTISEMENTS);
-        }
-    };
-    fetchAllData();
-  }, []);
-
+  
   useEffect(() => {
     if (!currentUser) {
         setBookmarkedPostIds(new Set());
@@ -271,7 +273,6 @@ const App: React.FC = () => {
   const bookmarkedPosts = useMemo(() => postsWithBookmarks.filter(p => p.isBookmarked), [postsWithBookmarks]);
 
   const handleAdminLogin = useCallback(() => {
-    // This is a mock login for admin testing purposes.
     setIsAdminView(true);
     setCurrentUser(MOCK_ADMIN);
     setIsAuthenticated(true);
@@ -568,6 +569,9 @@ const App: React.FC = () => {
 
 
   const renderContent = () => {
+    if (isDataLoading) {
+       return <div className="flex h-full items-center justify-center"><p>데이터를 불러오는 중...</p></div>;
+    }
     if (selectedPost) {
       return <PostDetail post={selectedPost} onBack={handleBackToList} currentUser={currentUser} onDeletePost={handleDeletePost} onEditPost={handleShowEditForm} />;
     }
