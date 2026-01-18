@@ -50,9 +50,10 @@ service cloud.firestore {
       allow write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
     
-    // User Activities (Bookmarks)
-    // - A user can only read and write to their own bookmarks collection and all documents within it.
-    match /user_activities/{userId}/bookmarks/{bookmarkId} {
+    // User Activities (Bookmarks, etc.)
+    // A user can read/write any document in any subcollection under their own user activity path.
+    // This covers bookmarks and any future user-specific data.
+    match /user_activities/{userId}/{path=**} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
     
