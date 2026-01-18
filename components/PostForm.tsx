@@ -210,7 +210,8 @@ const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel, activeCategory,
       setIsContentImageUploading(true);
       try {
         const uploadPromises = Array.from(e.target.files).map(async (file) => {
-          const storageRef = ref(storage, `posts/content/${Date.now()}_${file.name}`);
+          // FIX: Explicitly cast 'file' to 'File' to resolve TypeScript error where it was being inferred as 'unknown'.
+          const storageRef = ref(storage, `posts/content/${Date.now()}_${(file as File).name}`);
           await uploadBytes(storageRef, file);
           return getDownloadURL(storageRef);
         });

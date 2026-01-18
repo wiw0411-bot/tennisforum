@@ -1,4 +1,54 @@
 
+// 중요: 아래 내용은 Firestore(데이터베이스) 규칙입니다.
+// 이미지 업로드 실패는 Firebase STORAGE(파일 저장소) 규칙이 없기 때문입니다.
+//
+// 해결 방법:
+// 1. Firebase 콘솔(console.firebase.google.com)로 이동하세요.
+// 2. `tennis-forum-app` 프로젝트를 선택하세요.
+// 3. 왼쪽 메뉴에서 빌드(Build) > Storage 로 이동하세요.
+// 4. 페이지 상단의 '규칙(Rules)' 탭을 클릭하세요.
+// 5. 편집기에 있는 모든 내용을 지우고, 아래 'FIREBASE STORAGE 규칙' 블록 전체를 복사하여 붙여넣으세요.
+// 6. '게시(Publish)' 버튼을 클릭하여 저장하세요.
+//
+// --- START: FIREBASE STORAGE 규칙 (이 부분을 복사하세요) ---
+/*
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Firestore에서 관리자 역할을 확인하는 함수
+    function isAdmin() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // 모든 파일에 대해 공개적인 읽기 허용
+    match /{allPaths=**} {
+      allow read;
+    }
+
+    // 인증된 사용자는 자신의 아바타 폴더에만 쓰기 가능
+    match /avatars/{userId}/{allPaths=**} {
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // 인증된 사용자는 게시물(posts) 폴더에 쓰기 가능
+    match /posts/{allPaths=**} {
+      allow write: if request.auth != null;
+    }
+    
+    // 관리자만 공지사항(announcements) 폴더에 쓰기 가능
+    match /announcements/{allPaths=**} {
+      allow write: if request.auth != null && isAdmin();
+    }
+  }
+}
+*/
+// --- END: FIREBASE STORAGE 규칙 ---
+
+
+// --- START: FIRESTORE 규칙 (이 파일의 실제 내용) ---
 rules_version = '2';
 
 service cloud.firestore {
