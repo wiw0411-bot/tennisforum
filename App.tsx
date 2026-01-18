@@ -225,15 +225,19 @@ const App: React.FC = () => {
         try {
             await seedInitialData(currentUser);
 
-            const [usersSnapshot, postsSnapshot, announcementsSnapshot, advertisementsSnapshot] = await Promise.all([
-                getDocs(collection(db, 'users')),
+            const [postsSnapshot, announcementsSnapshot, advertisementsSnapshot] = await Promise.all([
                 getDocs(collection(db, 'posts')),
                 getDocs(collection(db, 'announcements')),
                 getDocs(collection(db, 'advertisements')),
             ]);
 
-            const userList = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
-            setUsers(userList);
+            if (currentUser.role === 'admin') {
+                const usersSnapshot = await getDocs(collection(db, 'users'));
+                const userList = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+                setUsers(userList);
+            } else {
+                setUsers([]); // Non-admins don't need the full user list
+            }
 
             const postList = postsSnapshot.docs.map(doc => {
                 const data = doc.data();
