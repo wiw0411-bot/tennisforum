@@ -218,27 +218,38 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const fetchAllData = async () => {
-        if (!currentUser) return;
+    const fetchAllDataAndBookmarks = async () => {
+        if (!currentUser) {
+            clearData();
+            setIsDataLoading(false);
+            return;
+        }
 
         setIsDataLoading(true);
         try {
-            await seedInitialData(currentUser);
+            // Step 1: Seed data ONLY if admin.
+            if (currentUser.role === 'admin') {
+                await seedInitialData(currentUser);
+            }
 
-            const [postsSnapshot, announcementsSnapshot, advertisementsSnapshot] = await Promise.all([
+            // Step 2: Fetch all public data and user-specific bookmarks in parallel.
+            const [
+                postsSnapshot, 
+                announcementsSnapshot, 
+                advertisementsSnapshot,
+                bookmarksSnapshot
+            ] = await Promise.all([
                 getDocs(collection(db, 'posts')),
                 getDocs(collection(db, 'announcements')),
                 getDocs(collection(db, 'advertisements')),
+                getDocs(collection(db, `user_activities/${currentUser.id}/bookmarks`))
             ]);
 
-            if (currentUser.role === 'admin') {
-                const usersSnapshot = await getDocs(collection(db, 'users'));
-                const userList = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
-                setUsers(userList);
-            } else {
-                setUsers([]); // Non-admins don't need the full user list
-            }
-
+            // Step 3: Process bookmarks.
+            const bookmarkIds = new Set(bookmarksSnapshot.docs.map(doc => doc.id));
+            setBookmarkedPostIds(bookmarkIds);
+            
+            // Step 4: Process other data (posts, announcements, ads).
             const postList = postsSnapshot.docs.map(doc => {
                 const data = doc.data();
                 return { 
@@ -269,6 +280,15 @@ const App: React.FC = () => {
             });
             setAdvertisements(adList.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
 
+            // Step 5: Fetch all users ONLY if admin.
+            if (currentUser.role === 'admin') {
+                const usersSnapshot = await getDocs(collection(db, 'users'));
+                const userList = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
+                setUsers(userList);
+            } else {
+                setUsers([]);
+            }
+
         } catch (error) {
             handleFirestoreError(error, "데이터 로딩");
         } finally {
@@ -276,11 +296,7 @@ const App: React.FC = () => {
         }
     };
     
-    if (currentUser) {
-      fetchAllData();
-    } else {
-      setIsDataLoading(false);
-    }
+    fetchAllDataAndBookmarks();
   }, [currentUser]);
 
   const [viewingPrivacyPolicy, setViewingPrivacyPolicy] = useState(false);
@@ -288,24 +304,6 @@ const App: React.FC = () => {
   const [viewingAnnouncements, setViewingAnnouncements] = useState(false);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
   
-  useEffect(() => {
-    if (!currentUser) {
-        setBookmarkedPostIds(new Set());
-        return;
-    };
-
-    const fetchBookmarks = async () => {
-        try {
-            const bookmarksSnapshot = await getDocs(collection(db, `user_activities/${currentUser.id}/bookmarks`));
-            const ids = new Set(bookmarksSnapshot.docs.map(doc => doc.id));
-            setBookmarkedPostIds(ids);
-        } catch (error) {
-            handleFirestoreError(error, "북마크 정보 로딩");
-        }
-    };
-    fetchBookmarks();
-  }, [currentUser]);
-
   const postsWithBookmarks = useMemo(() => {
       return posts.map(post => ({
           ...post,
