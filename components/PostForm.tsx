@@ -191,11 +191,12 @@ const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel, activeCategory,
     if (file) {
       setIsRepImageUploading(true);
       try {
-        const storageRef = ref(storage, `posts/rep/${Date.now()}_${file.name}`);
+        // FIX: Explicitly cast 'file' to 'File' to resolve TypeScript error where it was being inferred as 'unknown'.
+        const storageRef = ref(storage, `posts/rep/${Date.now()}_${(file as File).name}`);
         await uploadBytes(storageRef, file);
         const downloadURL = await getDownloadURL(storageRef);
         setImageUrl(downloadURL);
-      } catch (error: any) {
+      } catch (error) {
         console.error("Representative image upload failed:", error);
         alert("대표 이미지 업로드에 실패했습니다.");
       } finally {

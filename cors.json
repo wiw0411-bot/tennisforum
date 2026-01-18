@@ -1,0 +1,9 @@
+
+[
+  {
+    "origin": ["https://tennisforum.ai.kr", "http://localhost:3000"],
+    "method": ["GET", "POST", "OPTIONS"],
+    "responseHeader": ["Content-Type"],
+    "maxAgeSeconds": 3600
+  }
+]
