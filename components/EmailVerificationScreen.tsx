@@ -40,23 +40,31 @@ const EmailVerificationScreen: React.FC<EmailVerificationScreenProps> = ({ email
                 인증 링크를 클릭해주세요.
             </p>
             <p className="text-xs text-gray-500 mt-4">
-                이메일을 받지 못하셨나요? 스팸 메일함을 확인하거나<br/>
-                아래 버튼을 눌러 다시 받아보세요.
+                인증을 완료하셨다면 아래 버튼을 눌러주세요.
             </p>
-            <div className="w-full mt-6 space-y-3">
-                <button
-                    onClick={handleResend}
-                    disabled={isSending}
-                    className="w-full h-12 flex items-center justify-center rounded-xl bg-[#ff5710] text-white font-semibold text-sm transition-transform active:scale-95 disabled:bg-[#ffc2aa]"
-                >
-                    {isSending ? '전송 중...' : '인증 이메일 재전송'}
-                </button>
+            <div className="w-full mt-6 space-y-4">
                 <button
                     onClick={onBackToLogin}
-                    className="w-full text-xs text-center text-gray-500 hover:text-[#ff5710]"
+                    className="w-full h-12 flex items-center justify-center rounded-xl bg-[#ff5710] text-white font-semibold text-sm transition-transform active:scale-95"
                 >
-                    로그인 화면으로 돌아가기
+                    인증완료
                 </button>
+                <div className="flex justify-center items-center space-x-4">
+                    <button
+                        onClick={handleResend}
+                        disabled={isSending}
+                        className="text-xs text-center text-gray-500 hover:text-[#ff5710] disabled:text-gray-400"
+                    >
+                        {isSending ? '전송 중...' : '인증 이메일 재전송'}
+                    </button>
+                    <span className="text-gray-300">|</span>
+                    <button
+                        onClick={onBackToLogin}
+                        className="text-xs text-center text-gray-500 hover:text-[#ff5710]"
+                    >
+                        로그인 화면으로 돌아가기
+                    </button>
+                </div>
             </div>
             {message && <p className={`text-xs mt-4 ${message.includes('실패') ? 'text-red-500' : 'text-green-600'}`}>{message}</p>}
         </div>

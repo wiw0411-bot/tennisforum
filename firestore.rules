@@ -1,0 +1,71 @@
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+  
+    // Users Collection
+    // - Authenticated users can read any user's public profile.
+    // - A user can create their own profile upon signup.
+    // - A user can update their own profile.
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth.uid == userId;
+      allow update: if request.auth.uid == userId;
+    }
+
+    // Posts Collection
+    // - Authenticated users can read all posts.
+    // - Authenticated users can create new posts.
+    // - A user can update or delete their own posts.
+    // - An admin can update or delete any post.
+    match /posts/{postId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && (resource.data.authorId == request.auth.uid || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+    }
+    
+    // Comments Subcollection within Posts
+    // - Authenticated users can read all comments for a post.
+    // - Authenticated users can create comments.
+    // - A user can delete their own comment.
+    // - An admin or the post author can delete any comment.
+    match /posts/{postId}/comments/{commentId} {
+      allow read, create: if request.auth != null;
+      allow delete: if request.auth != null && (resource.data.authorId == request.auth.uid || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' || get(/databases/$(database)/documents/posts/$(postId)).data.authorId == request.auth.uid);
+    }
+
+    // Announcements Collection
+    // - Authenticated users can read all announcements.
+    // - Only admins can create, update, or delete announcements.
+    match /announcements/{announcementId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // Advertisements Collection
+    // - Authenticated users can read all advertisements.
+    // - Only admins can create, update, or delete advertisements.
+    match /advertisements/{adId} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+    
+    // User Activities (Bookmarks, etc.)
+    // - A user can only access their own activities.
+    match /user_activities/{userId}/{activity}/{docId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Schedule-related user data (Rate Profiles, Revenues, Notes)
+    // - A user can only access their own schedule data.
+    match /users/{userId}/rateProfiles/{profileId} {
+        allow read, write, delete: if request.auth != null && request.auth.uid == userId;
+    }
+    match /users/{userId}/revenues/{revenueId} {
+        allow read, write, delete: if request.auth != null && request.auth.uid == userId;
+    }
+    match /users/{userId}/notes/{noteId} {
+        allow read, write, delete: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

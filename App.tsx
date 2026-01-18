@@ -25,7 +25,7 @@ import ArrowLeftIcon from './components/icons/ArrowLeftIcon';
 import AdBanner from './components/AdBanner';
 import EmailVerificationScreen from './components/EmailVerificationScreen';
 import { db, auth } from './firebase'; 
-import { collection, getDocs, Timestamp, addDoc, serverTimestamp, doc, deleteDoc, updateDoc, setDoc, getDoc } from 'firebase/firestore'; 
+import { collection, getDocs, Timestamp, addDoc, serverTimestamp, doc, deleteDoc, updateDoc, setDoc, getDoc, writeBatch } from 'firebase/firestore'; 
 import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
 
 
@@ -39,6 +39,94 @@ const handleFirestoreError = (error: any, context: string) => {
         alert(`오류가 발생했습니다. (${context})\n다시 시도해주세요.`);
     }
 };
+
+const seedInitialData = async (currentUser: User | null) => {
+    // 1. Seed Posts (accessible to all users)
+    try {
+        const postsRef = collection(db, 'posts');
+        const postsSnapshot = await getDocs(postsRef);
+        
+        if (postsSnapshot.empty) {
+            console.log("Seeding initial posts...");
+            const batch = writeBatch(db);
+
+            // Job Posting
+            const jobPostingRef = doc(postsRef);
+            batch.set(jobPostingRef, {
+                author: '서울테니스클럽', authorId: 'admin_seed', category: Category.JOB_POSTING, location: '서울특별시 강남구', title: '서울테니스클럽',
+                recruitmentField: '테니스', workingType: '풀타임', workingHours: '09:00 ~ 18:00', workingDays: ['월', '화', '수', '목', '금'],
+                salary: '월급 350만원', content: '경력 3년 이상 코치님을 모집합니다. 자세한 내용은 문의 바랍니다.', imageUrl: 'https://i.imgur.com/K2H1KaY.png',
+                views: 120, createdAt: serverTimestamp(), commentsAllowed: true,
+            });
+            
+            // Job Seeking
+            const jobSeekingRef = doc(postsRef);
+            batch.set(jobSeekingRef, {
+                 author: '김코치', authorId: 'user_seed_1', category: Category.JOB_SEEKING, location: '경기도 수원시', title: '[테니스] 선수 10년, 레슨 5년이상 코치 구직',
+                 recruitmentField: '테니스', field: '테니스', playerCareer: '10', hasLessonCareer: true, lessonCareer: '5', memberManagementSkill: '상',
+                 counselingSkill: '가능', workingType: '풀타임', workingHours: '시간 협의', workingDays: ['요일 협의'], salary: '급여 협의',
+                 content: '성실하게 지도하겠습니다. 연락주세요.', views: 88, createdAt: serverTimestamp(), commentsAllowed: true,
+            });
+
+            // Court Transfer
+            const courtTransferRef = doc(postsRef);
+            batch.set(courtTransferRef, {
+                author: '코트주인', authorId: 'user_seed_2', category: Category.COURT_TRANSFER, location: '인천광역시 연수구', title: '[인천광역시 연수구] 실내 테니스장 양도',
+                courtType: '실내', area: '150평', monthlyRent: '800만원', premium: '1억 5천만원', content: '시설 깨끗하고 회원 많습니다. 개인 사정으로 급하게 양도합니다.',
+                imageUrl: 'https://i.imgur.com/S3yv1sU.png', views: 250, createdAt: serverTimestamp(), commentsAllowed: false,
+            });
+
+            // Free Board
+            const freeBoardRef = doc(postsRef);
+            batch.set(freeBoardRef, {
+                author: '테니스사랑', authorId: 'user_seed_3', category: Category.FREE_BOARD, location: '', subCategory: '정보 공유',
+                title: '초보자용 라켓 추천해주세요!', content: '테니스 시작한지 얼마 안된 테린이입니다. 입문용으로 괜찮은 라켓 있으면 추천 부탁드립니다!',
+                views: 55, createdAt: serverTimestamp(), commentsAllowed: true,
+            });
+
+            await batch.commit();
+        }
+    } catch (error) {
+        handleFirestoreError(error, "초기 게시물 생성");
+    }
+
+    // 2. Seed Admin-only data (Announcements & Ads)
+    if (currentUser?.role === 'admin') {
+        // Seed announcements
+        try {
+            const announcementsRef = collection(db, 'announcements');
+            const announcementsSnapshot = await getDocs(announcementsRef);
+            if (announcementsSnapshot.empty) {
+                console.log("Seeding initial announcements as admin...");
+                await addDoc(announcementsRef, {
+                    title: '테니스포럼 서비스 정식 오픈!',
+                    content: '안녕하세요, 테니스 지도자와 관계자들을 위한 커뮤니티, 테니스포럼입니다. 많은 이용 부탁드립니다.',
+                    createdAt: serverTimestamp(),
+                });
+            }
+        } catch (error) {
+            handleFirestoreError(error, "초기 공지사항 생성");
+        }
+        
+        // Seed advertisements
+        try {
+            const advertisementsRef = collection(db, 'advertisements');
+            const advertisementsSnapshot = await getDocs(advertisementsRef);
+            if (advertisementsSnapshot.empty) {
+                console.log("Seeding initial advertisements as admin...");
+                await addDoc(advertisementsRef, {
+                    imageUrl: 'https://i.imgur.com/y1mGkUd.png',
+                    linkUrl: 'https://tennisforum.ai.kr',
+                    isActive: true,
+                    createdAt: serverTimestamp(),
+                });
+            }
+        } catch (error) {
+            handleFirestoreError(error, "초기 광고 생성");
+        }
+    }
+};
+
 
 const App: React.FC = () => {
   const [showSplashScreen, setShowSplashScreen] = useState(true);
@@ -135,6 +223,8 @@ const App: React.FC = () => {
 
         setIsDataLoading(true);
         try {
+            await seedInitialData(currentUser);
+
             const [usersSnapshot, postsSnapshot, announcementsSnapshot, advertisementsSnapshot] = await Promise.all([
                 getDocs(collection(db, 'users')),
                 getDocs(collection(db, 'posts')),
@@ -150,7 +240,7 @@ const App: React.FC = () => {
                 return { 
                     id: doc.id, 
                     ...data, 
-                    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt 
+                    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : new Date().toISOString() 
                 } as Post;
             });
             setPosts(postList);
@@ -160,7 +250,7 @@ const App: React.FC = () => {
                 return { 
                     id: doc.id, 
                     ...data, 
-                    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt 
+                    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : new Date().toISOString() 
                 } as Announcement;
             });
             setAnnouncements(announcementList.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
@@ -170,7 +260,7 @@ const App: React.FC = () => {
                 return { 
                     id: doc.id, 
                     ...data, 
-                    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : data.createdAt 
+                    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : new Date().toISOString() 
                 } as Advertisement;
             });
             setAdvertisements(adList.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
