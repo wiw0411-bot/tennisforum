@@ -7,6 +7,8 @@ import ImageIcon from './icons/ImageIcon';
 import PaperClipIcon from './icons/PaperClipIcon';
 import XIcon from './icons/XIcon';
 import ArrowLeftIcon from './icons/ArrowLeftIcon';
+import { storage } from '../firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 type NewPostData = Omit<Post, 'id' | 'createdAt' | 'views'>;
 
@@ -37,6 +39,7 @@ const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel, activeCategory,
   const [location, setLocation] = useState('');
   
   const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [isRepImageUploading, setIsRepImageUploading] = useState(false);
   const [category, setCategory] = useState<Category>(activeCategory);
   const [content, setContent] = useState(getInitialContent(category));
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
@@ -89,6 +92,7 @@ const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel, activeCategory,
   
   // Content images state
   const [contentImages, setContentImages] = useState<string[]>([]);
+  const [isContentImageUploading, setIsContentImageUploading] = useState(false);
   const contentFileInputRef = useRef<HTMLInputElement>(null);
   
   const isJobPosting = category === Category.JOB_POSTING;
@@ -182,24 +186,40 @@ const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel, activeCategory,
   }, [isEditing, postToEdit]);
 
 
-  const handleRepImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const reader = new FileReader();
-      reader.addEventListener('load', () => {
-        setImageUrl(reader.result as string);
-      });
-      reader.readAsDataURL(e.target.files[0]);
+  const handleRepImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setIsRepImageUploading(true);
+      try {
+        const storageRef = ref(storage, `posts/rep/${Date.now()}_${file.name}`);
+        await uploadBytes(storageRef, file);
+        const downloadURL = await getDownloadURL(storageRef);
+        setImageUrl(downloadURL);
+      } catch (error: any) {
+        console.error("Representative image upload failed:", error);
+        alert("대표 이미지 업로드에 실패했습니다.");
+      } finally {
+        setIsRepImageUploading(false);
+      }
     }
   };
   
-  const handleContentImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      for (const file of e.target.files) {
-        const reader = new FileReader();
-        reader.onloadend = () => {
-          setContentImages(prev => [...prev, reader.result as string]);
-        };
-        reader.readAsDataURL(file);
+  const handleContentImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setIsContentImageUploading(true);
+      try {
+        const uploadPromises = Array.from(e.target.files).map(async (file) => {
+          const storageRef = ref(storage, `posts/content/${Date.now()}_${file.name}`);
+          await uploadBytes(storageRef, file);
+          return getDownloadURL(storageRef);
+        });
+        const urls = await Promise.all(uploadPromises);
+        setContentImages(prev => [...prev, ...urls]);
+      } catch (error) {
+        console.error("Content images upload failed:", error);
+        alert("본문 이미지 업로드에 실패했습니다.");
+      } finally {
+        setIsContentImageUploading(false);
       }
     }
   };
@@ -699,11 +719,17 @@ const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel, activeCategory,
                     </div>
                     ) : (
                     <div className="space-y-1 text-center">
-                        <ImageIcon className="mx-auto h-12 w-12 text-gray-400" />
-                        <div className="flex text-xs text-gray-600">
-                            <p className="pl-1">썸네일 이미지 업로드 (1:1 권장)</p>
-                        </div>
-                        <p className="text-xs text-gray-500">PNG, JPG 파일</p>
+                        {isRepImageUploading ? (
+                            <div className="text-xs text-gray-500">업로드 중...</div>
+                        ) : (
+                            <>
+                            <ImageIcon className="mx-auto h-12 w-12 text-gray-400" />
+                            <div className="flex text-xs text-gray-600">
+                                <p className="pl-1">썸네일 이미지 업로드 (1:1 권장)</p>
+                            </div>
+                            <p className="text-xs text-gray-500">PNG, JPG 파일</p>
+                            </>
+                        )}
                     </div>
                     )}
                 </div>
@@ -713,6 +739,7 @@ const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel, activeCategory,
                     ref={fileInputRef} 
                     onChange={handleRepImageSelect}
                     className="hidden" 
+                    disabled={isRepImageUploading}
                 />
                 </div>
             )}
@@ -1118,10 +1145,17 @@ const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel, activeCategory,
                     <button
                     type="button"
                     onClick={() => contentFileInputRef.current?.click()}
-                    className="aspect-square flex flex-col items-center justify-center border-2 border-gray-300 border-dashed rounded-md text-gray-500 hover:border-[#ff5710] hover:text-[#ff5710]"
+                    disabled={isContentImageUploading}
+                    className="aspect-square flex flex-col items-center justify-center border-2 border-gray-300 border-dashed rounded-md text-gray-500 hover:border-[#ff5710] hover:text-[#ff5710] disabled:opacity-50"
                     >
-                    <PaperClipIcon />
-                    <span className="text-xs mt-1">사진 추가</span>
+                    {isContentImageUploading ? (
+                        <span className="text-xs">업로드 중...</span>
+                    ) : (
+                        <>
+                        <PaperClipIcon />
+                        <span className="text-xs mt-1">사진 추가</span>
+                        </>
+                    )}
                     </button>
                 </div>
                 <input 
@@ -1131,6 +1165,7 @@ const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel, activeCategory,
                     onChange={handleContentImageChange}
                     className="hidden"
                     multiple
+                    disabled={isContentImageUploading}
                 />
             </div>
             <div className="space-y-4">

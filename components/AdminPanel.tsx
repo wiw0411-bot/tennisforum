@@ -1,6 +1,8 @@
 
 
 
+
+
 import React, { useState, useMemo, useRef } from 'react';
 import { Post, Announcement, User, Advertisement } from '../types';
 import PowerIcon from './icons/PowerIcon';
@@ -11,6 +13,8 @@ import UserCircleIcon from './icons/UserCircleIcon';
 import PostDetail from './PostDetail';
 import ArrowLeftIcon from './icons/ArrowLeftIcon';
 import XIcon from './icons/XIcon';
+import { storage } from '../firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 interface AdminPanelProps {
   currentUser: User | null;
@@ -219,6 +223,7 @@ const AnnouncementManagement: React.FC<{
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
     const [imageUrl, setImageUrl] = useState<string | null>(null);
+    const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -237,14 +242,21 @@ const AnnouncementManagement: React.FC<{
         setImageUrl(null);
     };
 
-    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setImageUrl(reader.result as string);
-            };
-            reader.readAsDataURL(file);
+            setIsUploading(true);
+            try {
+                const storageRef = ref(storage, `announcements/${Date.now()}_${file.name}`);
+                await uploadBytes(storageRef, file);
+                const downloadURL = await getDownloadURL(storageRef);
+                setImageUrl(downloadURL);
+            } catch (error) {
+                console.error("Image upload failed:", error);
+                alert("이미지 업로드에 실패했습니다.");
+            } finally {
+                setIsUploading(false);
+            }
         }
     };
     
@@ -261,9 +273,9 @@ const AnnouncementManagement: React.FC<{
                     <textarea placeholder="내용" value={content} onChange={e => setContent(e.target.value)} rows={4} className="w-full bg-gray-100 border-gray-300 rounded-md shadow-sm focus:border-[#ff5710] focus:ring-[#ff5710] text-gray-900 placeholder-gray-500"></textarea>
                     
                     <div className="flex items-center space-x-4">
-                        <button type="button" onClick={() => fileInputRef.current?.click()} className="flex items-center px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-200">
+                        <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="flex items-center px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-200 disabled:bg-gray-200 disabled:cursor-not-allowed">
                             <ImageIcon className="w-5 h-5 mr-2" />
-                            이미지 첨부
+                            {isUploading ? '업로드 중...' : '이미지 첨부'}
                         </button>
                         <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
                         {imageUrl && (

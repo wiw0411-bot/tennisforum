@@ -3,6 +3,8 @@ import { User } from '../types';
 import ArrowLeftIcon from './icons/ArrowLeftIcon';
 import UserCircleIcon from './icons/UserCircleIcon';
 import CameraIcon from './icons/CameraIcon';
+import { storage } from '../firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 interface ProfileEditScreenProps {
   currentUser: User;
@@ -13,15 +15,24 @@ interface ProfileEditScreenProps {
 const ProfileEditScreen: React.FC<ProfileEditScreenProps> = ({ currentUser, onBack, onSave }) => {
   const [name, setName] = useState(currentUser.name);
   const [avatar, setAvatar] = useState<string | undefined>(currentUser.avatarUrl);
+  const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files.length > 0) {
-      const reader = new FileReader();
-      reader.addEventListener('load', () => {
-        setAvatar(reader.result as string);
-      });
-      reader.readAsDataURL(e.target.files[0]);
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setIsUploading(true);
+      try {
+        const storageRef = ref(storage, `avatars/${currentUser.id}/${file.name}`);
+        await uploadBytes(storageRef, file);
+        const downloadURL = await getDownloadURL(storageRef);
+        setAvatar(downloadURL);
+      } catch (error) {
+        console.error("Avatar upload failed:", error);
+        alert("프로필 사진 업로드에 실패했습니다.");
+      } finally {
+        setIsUploading(false);
+      }
     }
   };
   
@@ -52,17 +63,24 @@ const ProfileEditScreen: React.FC<ProfileEditScreenProps> = ({ currentUser, onBa
                   <button
                       type="button"
                       className="w-24 h-24 rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
-                      onClick={() => fileInputRef.current?.click()}
+                      onClick={() => !isUploading && fileInputRef.current?.click()}
                       aria-label="프로필 사진 변경"
+                      disabled={isUploading}
                   >
                       {avatar ? (
                           <img src={avatar} alt="프로필" className="w-24 h-24 rounded-full object-cover" />
                       ) : (
                           <UserCircleIcon className="w-24 h-24 text-gray-300" />
                       )}
-                      <div className="absolute bottom-0 right-0 bg-white rounded-full p-1.5 border border-gray-200 shadow-sm hover:bg-gray-100">
-                          <CameraIcon className="w-4 h-4 text-gray-600" />
-                      </div>
+                      {isUploading ? (
+                          <div className="absolute inset-0 bg-black bg-opacity-50 rounded-full flex items-center justify-center">
+                              <span className="text-white text-xs">업로드중...</span>
+                          </div>
+                      ) : (
+                        <div className="absolute bottom-0 right-0 bg-white rounded-full p-1.5 border border-gray-200 shadow-sm hover:bg-gray-100">
+                            <CameraIcon className="w-4 h-4 text-gray-600" />
+                        </div>
+                      )}
                   </button>
                   <input
                       type="file"
@@ -70,6 +88,7 @@ const ProfileEditScreen: React.FC<ProfileEditScreenProps> = ({ currentUser, onBa
                       onChange={handleAvatarChange}
                       className="hidden"
                       accept="image/*"
+                      disabled={isUploading}
                   />
               </div>
             </div>
@@ -91,7 +110,7 @@ const ProfileEditScreen: React.FC<ProfileEditScreenProps> = ({ currentUser, onBa
             <div className="flex justify-end">
               <button
                 type="submit"
-                disabled={!name.trim() || (name.trim() === currentUser.name && avatar === currentUser.avatarUrl)}
+                disabled={isUploading || !name.trim() || (name.trim() === currentUser.name && avatar === currentUser.avatarUrl)}
                 className="px-6 py-2 bg-orange-500 text-white rounded-md hover:bg-orange-600 transition-colors text-sm font-medium disabled:bg-orange-300 disabled:cursor-not-allowed"
               >
                 저장
