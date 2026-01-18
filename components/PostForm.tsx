@@ -8,7 +8,8 @@ import PaperClipIcon from './icons/PaperClipIcon';
 import XIcon from './icons/XIcon';
 import ArrowLeftIcon from './icons/ArrowLeftIcon';
 import { storage } from '../firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+// FIX: The project seems to be using Firebase v8 SDK.
+// Removed v9 modular imports for storage. The `storage` instance from firebase.ts will be used.
 
 type NewPostData = Omit<Post, 'id' | 'createdAt' | 'views'>;
 
@@ -191,10 +192,10 @@ const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel, activeCategory,
     if (file) {
       setIsRepImageUploading(true);
       try {
-        // FIX: Explicitly cast 'file' to 'File' to resolve TypeScript error where it was being inferred as 'unknown'.
-        const storageRef = ref(storage, `posts/rep/${Date.now()}_${(file as File).name}`);
-        await uploadBytes(storageRef, file);
-        const downloadURL = await getDownloadURL(storageRef);
+        // FIX: Use v8 storage syntax
+        const storageRef = storage.ref(`posts/rep/${Date.now()}_${file.name}`);
+        await storageRef.put(file);
+        const downloadURL = await storageRef.getDownloadURL();
         setImageUrl(downloadURL);
       } catch (error) {
         console.error("Representative image upload failed:", error);
@@ -210,10 +211,10 @@ const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel, activeCategory,
       setIsContentImageUploading(true);
       try {
         const uploadPromises = Array.from(e.target.files).map(async (file) => {
-          // FIX: Explicitly cast 'file' to 'File' to resolve TypeScript error where it was being inferred as 'unknown'.
-          const storageRef = ref(storage, `posts/content/${Date.now()}_${(file as File).name}`);
-          await uploadBytes(storageRef, file);
-          return getDownloadURL(storageRef);
+          // FIX: Use v8 storage syntax
+          const storageRef = storage.ref(`posts/content/${Date.now()}_${file.name}`);
+          await storageRef.put(file);
+          return storageRef.getDownloadURL();
         });
         const urls = await Promise.all(uploadPromises);
         setContentImages(prev => [...prev, ...urls]);

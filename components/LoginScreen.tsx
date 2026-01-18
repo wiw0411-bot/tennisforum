@@ -1,15 +1,14 @@
 
 
+
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { auth, db } from '../firebase';
-import { 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword,
-  sendEmailVerification,
-  fetchSignInMethodsForEmail,
-  User as FirebaseUser,
-} from 'firebase/auth';
-import { collection, query, where, getDocs, doc, setDoc, getDoc } from 'firebase/firestore';
+// FIX: The project seems to be using Firebase v8 SDK.
+// Removed v9 modular imports and will use v8 namespaced API.
+import firebase from 'firebase/app';
+import 'firebase/auth';
+import 'firebase/firestore';
 import { User } from '../types';
 
 import { loginBackgroundImage } from '../assets/imageAssets';
@@ -18,6 +17,7 @@ interface LoginScreenProps {
   onShowPrivacyPolicy: () => void;
   onShowTerms: () => void;
 }
+type FirebaseUser = firebase.User;
 
 const LoginScreen: React.FC<LoginScreenProps> = ({ onShowPrivacyPolicy, onShowTerms }) => {
   const [isLoginView, setIsLoginView] = useState(true);
@@ -111,7 +111,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onShowPrivacyPolicy, onShowTe
     setIsCheckingEmail(true);
     setEmailCheckMessage('');
     try {
-        const methods = await fetchSignInMethodsForEmail(auth, email);
+        // FIX: Use v8 fetchSignInMethodsForEmail syntax
+        const methods = await auth.fetchSignInMethodsForEmail(email);
         if (methods.length > 0) {
             setEmailCheckMessage('이미 사용 중인 이메일입니다.');
             setIsEmailAvailable(false);
@@ -140,9 +141,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onShowPrivacyPolicy, onShowTe
     setIsCheckingNickname(true);
     setNicknameCheckMessage('');
     try {
-        const usersRef = collection(db, 'users');
-        const q = query(usersRef, where("name", "==", trimmedNickname));
-        const querySnapshot = await getDocs(q);
+        // FIX: Use v8 collection/query/get syntax
+        const usersRef = db.collection('users');
+        const q = usersRef.where("name", "==", trimmedNickname);
+        const querySnapshot = await q.get();
         if (!querySnapshot.empty) {
             setNicknameCheckMessage('이미 사용 중인 닉네임입니다.');
             setIsNicknameAvailable(false);
@@ -162,8 +164,9 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onShowPrivacyPolicy, onShowTe
 
 
   const createUserProfileDocument = async (userAuth: FirebaseUser, additionalData: { name: string; phone: string }) => {
-      const userRef = doc(db, 'users', userAuth.uid);
-      const snapshot = await getDoc(userRef);
+      // FIX: Use v8 doc/get syntax
+      const userRef = db.collection('users').doc(userAuth.uid);
+      const snapshot = await userRef.get();
 
       if (!snapshot.exists()) {
           const { photoURL } = userAuth;
@@ -176,7 +179,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onShowPrivacyPolicy, onShowTe
               ...(photoURL && { avatarUrl: photoURL }),
           };
           try {
-              await setDoc(userRef, newUser);
+              // FIX: Use v8 set syntax
+              await userRef.set(newUser);
           } catch(err) {
               console.error("Error creating user document", err);
               throw err;
@@ -191,7 +195,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onShowPrivacyPolicy, onShowTe
 
     if (isLoginView) {
       try {
-        await signInWithEmailAndPassword(auth, email, password);
+        // FIX: Use v8 signInWithEmailAndPassword syntax
+        await auth.signInWithEmailAndPassword(email, password);
       } catch (err: any) {
         if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
             setApiError('이메일 또는 비밀번호가 잘못되었습니다.');
@@ -206,9 +211,15 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onShowPrivacyPolicy, onShowTe
       }
       try {
         auth.languageCode = 'ko'; // Set language before sending email
-        const { user } = await createUserWithEmailAndPassword(auth, email, password);
+        // FIX: Use v8 createUserWithEmailAndPassword syntax
+        const { user } = await auth.createUserWithEmailAndPassword(email, password);
+        // FIX: user can be null, add a check
+        if (!user) {
+            throw new Error("User creation failed.");
+        }
         await createUserProfileDocument(user, { name: nickname, phone });
-        await sendEmailVerification(user);
+        // FIX: Use v8 sendEmailVerification syntax
+        await user.sendEmailVerification();
         // After this, the onAuthStateChanged listener in App.tsx will detect the new unverified user.
       } catch (err: any) {
          if (err.code === 'auth/email-already-in-use') {

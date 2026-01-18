@@ -59,7 +59,7 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ announcements
                     {ann.imageUrl && (
                         <img src={ann.imageUrl} alt={ann.title} className="w-full h-auto object-cover rounded-lg mb-4" />
                     )}
-                    <p className="text-sm text-gray-600 whitespace-pre-wrap bg-gray-50 p-4 rounded-lg">{ann.content}</p>
+                    <div className="text-sm text-gray-600 bg-gray-50 p-4 rounded-lg" dangerouslySetInnerHTML={{ __html: ann.content }} />
                   </div>
                 )}
               </div>

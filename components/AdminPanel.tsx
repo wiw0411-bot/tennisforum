@@ -3,6 +3,10 @@
 
 
 
+
+
+
+
 import React, { useState, useMemo, useRef } from 'react';
 import { Post, Announcement, User, Advertisement } from '../types';
 import PowerIcon from './icons/PowerIcon';
@@ -14,7 +18,8 @@ import PostDetail from './PostDetail';
 import ArrowLeftIcon from './icons/ArrowLeftIcon';
 import XIcon from './icons/XIcon';
 import { storage } from '../firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+// FIX: The project seems to be using Firebase v8 SDK.
+// Removed v9 modular imports for storage. The `storage` instance from firebase.ts will be used.
 
 interface AdminPanelProps {
   currentUser: User | null;
@@ -228,7 +233,8 @@ const AnnouncementManagement: React.FC<{
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if(!title.trim() || !content.trim()) {
+        const plainTextContent = content.replace(/<[^>]*>/g, '').trim();
+        if(!title.trim() || !plainTextContent) {
             alert('제목과 내용을 모두 입력해주세요.');
             return;
         }
@@ -241,15 +247,20 @@ const AnnouncementManagement: React.FC<{
         setContent('');
         setImageUrl(null);
     };
+    
+    const applyStyle = (command: string, value: string | null = null) => {
+      document.execCommand(command, false, value);
+    };
 
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
             setIsUploading(true);
             try {
-                const storageRef = ref(storage, `announcements/${Date.now()}_${file.name}`);
-                await uploadBytes(storageRef, file);
-                const downloadURL = await getDownloadURL(storageRef);
+                // FIX: Use v8 storage syntax
+                const storageRef = storage.ref(`announcements/${Date.now()}_${file.name}`);
+                await storageRef.put(file);
+                const downloadURL = await storageRef.getDownloadURL();
                 setImageUrl(downloadURL);
             } catch (error) {
                 console.error("Image upload failed:", error);
@@ -270,7 +281,28 @@ const AnnouncementManagement: React.FC<{
             <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <input type="text" placeholder="제목" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-gray-100 border-gray-300 rounded-md shadow-sm focus:border-[#ff5710] focus:ring-[#ff5710] text-gray-900 placeholder-gray-500"/>
-                    <textarea placeholder="내용" value={content} onChange={e => setContent(e.target.value)} rows={4} className="w-full bg-gray-100 border-gray-300 rounded-md shadow-sm focus:border-[#ff5710] focus:ring-[#ff5710] text-gray-900 placeholder-gray-500"></textarea>
+                    
+                    <div>
+                        <div className="flex items-center space-x-2 p-2 bg-gray-100 rounded-t-md border-b border-gray-300">
+                            <button type="button" onClick={() => applyStyle('bold')} className="font-bold w-8 h-8 flex items-center justify-center bg-white rounded shadow-sm text-sm">B</button>
+                            <div className="relative w-8 h-8 bg-white rounded shadow-sm">
+                                <input 
+                                  type="color" 
+                                  onChange={(e) => applyStyle('foreColor', e.target.value)} 
+                                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                  aria-label="글자 색상 변경"
+                                />
+                                <div className="w-full h-full flex items-center justify-center text-sm font-bold text-gray-700 pointer-events-none">A</div>
+                            </div>
+                        </div>
+                        <div
+                            onInput={e => setContent(e.currentTarget.innerHTML)}
+                            contentEditable
+                            dangerouslySetInnerHTML={{ __html: content }}
+                            className="w-full h-32 p-3 bg-white border border-t-0 border-gray-300 rounded-b-md shadow-sm focus:outline-none focus:ring-2 focus:ring-[#ff5710] text-gray-900 placeholder-gray-500 overflow-y-auto"
+                            style={{ minHeight: '8rem' }}
+                        />
+                    </div>
                     
                     <div className="flex items-center space-x-4">
                         <button type="button" onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="flex items-center px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-200 disabled:bg-gray-200 disabled:cursor-not-allowed">
@@ -418,7 +450,7 @@ const AnnouncementDetailView: React.FC<{ announcement: Announcement; onBack: () 
           {announcement.imageUrl && (
               <img src={announcement.imageUrl} alt={announcement.title} className="w-full h-auto object-cover rounded-lg my-4" />
           )}
-          <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{announcement.content}</p>
+          <div className="text-sm text-gray-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: announcement.content }} />
       </div>
     </main>
   </div>

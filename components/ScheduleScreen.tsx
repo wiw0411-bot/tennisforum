@@ -7,7 +7,8 @@ import PencilSquareIcon from './icons/PencilSquareIcon';
 import TrashIcon from './icons/TrashIcon';
 import { isHoliday } from '../data/holidays';
 import { db } from '../firebase';
-import { collection, getDocs, doc, setDoc, deleteDoc, addDoc, updateDoc } from 'firebase/firestore';
+// FIX: The project seems to be using Firebase v8 SDK.
+// Removed v9 modular imports and will use v8 namespaced API.
 
 interface ScheduleScreenProps {
   currentUser: User | null;
@@ -55,9 +56,10 @@ const ScheduleScreen: React.FC<ScheduleScreenProps> = ({ currentUser }) => {
       setIsLoading(true);
       try {
         const [profilesSnapshot, revenuesSnapshot, notesSnapshot] = await Promise.all([
-          getDocs(collection(db, `users/${currentUser.id}/rateProfiles`)),
-          getDocs(collection(db, `users/${currentUser.id}/revenues`)),
-          getDocs(collection(db, `users/${currentUser.id}/notes`))
+          // FIX: Use v8 collection/get syntax
+          db.collection(`users/${currentUser.id}/rateProfiles`).get(),
+          db.collection(`users/${currentUser.id}/revenues`).get(),
+          db.collection(`users/${currentUser.id}/notes`).get()
         ]);
 
         const profiles = profilesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as LocationRateProfile));
@@ -130,8 +132,9 @@ const ScheduleScreen: React.FC<ScheduleScreenProps> = ({ currentUser }) => {
     }
 
     try {
-        const noteRef = doc(db, `users/${currentUser.id}/notes`, dateKeyForSelectedDay);
-        await setDoc(noteRef, { entries: updatedNotesForDay });
+        // FIX: Use v8 doc/set syntax
+        const noteRef = db.collection(`users/${currentUser.id}/notes`).doc(dateKeyForSelectedDay);
+        await noteRef.set({ entries: updatedNotesForDay });
         setNotes(prev => ({ ...prev, [dateKeyForSelectedDay]: updatedNotesForDay }));
         setIsEditingNote(false);
     } catch (error) {
@@ -144,18 +147,21 @@ const ScheduleScreen: React.FC<ScheduleScreenProps> = ({ currentUser }) => {
     if (!dateKeyForSelectedDay || !currentUser) return;
     if (window.confirm('정말 이 메모를 삭제하시겠습니까?')) {
         const updatedNotesForDay = notesForDay.filter(n => n.id !== noteIdToDelete);
-        const noteRef = doc(db, `users/${currentUser.id}/notes`, dateKeyForSelectedDay);
+        // FIX: Use v8 doc syntax
+        const noteRef = db.collection(`users/${currentUser.id}/notes`).doc(dateKeyForSelectedDay);
         
         try {
             if (updatedNotesForDay.length === 0) {
-                await deleteDoc(noteRef);
+                // FIX: Use v8 delete syntax
+                await noteRef.delete();
                 setNotes(prev => {
                     const newNotes = {...prev};
                     delete newNotes[dateKeyForSelectedDay];
                     return newNotes;
                 });
             } else {
-                await setDoc(noteRef, { entries: updatedNotesForDay });
+                // FIX: Use v8 set syntax
+                await noteRef.set({ entries: updatedNotesForDay });
                 setNotes(prev => ({...prev, [dateKeyForSelectedDay]: updatedNotesForDay }));
             }
         } catch (error) {
@@ -174,12 +180,14 @@ const ScheduleScreen: React.FC<ScheduleScreenProps> = ({ currentUser }) => {
 
     try {
         if (profileToEdit) { // Editing existing profile
-            const profileRef = doc(db, `users/${currentUser.id}/rateProfiles`, profileToEdit.id);
-            await updateDoc(profileRef, profileData);
+            // FIX: Use v8 doc/update syntax
+            const profileRef = db.collection(`users/${currentUser.id}/rateProfiles`).doc(profileToEdit.id);
+            await profileRef.update(profileData);
             setLocationProfiles(prev => prev.map(p => p.id === profileToEdit.id ? { ...p, ...profileData } : p));
         } else { // Adding new profile
-            const profilesCollection = collection(db, `users/${currentUser.id}/rateProfiles`);
-            const docRef = await addDoc(profilesCollection, profileData);
+            // FIX: Use v8 collection/add syntax
+            const profilesCollection = db.collection(`users/${currentUser.id}/rateProfiles`);
+            const docRef = await profilesCollection.add(profileData);
             const newProfile = { id: docRef.id, ...profileData };
             setLocationProfiles(prev => [...prev, newProfile]);
         }
@@ -195,8 +203,9 @@ const ScheduleScreen: React.FC<ScheduleScreenProps> = ({ currentUser }) => {
     if (!currentUser) return;
     if (window.confirm('정말로 이 지점을 삭제하시겠습니까? 모든 관련 수익 데이터도 삭제될 수 있습니다.')) {
         try {
-            const profileRef = doc(db, `users/${currentUser.id}/rateProfiles`, profileId);
-            await deleteDoc(profileRef);
+            // FIX: Use v8 doc/delete syntax
+            const profileRef = db.collection(`users/${currentUser.id}/rateProfiles`).doc(profileId);
+            await profileRef.delete();
             setLocationProfiles(prev => prev.filter(p => p.id !== profileId));
         } catch (error) {
             console.error("Error deleting rate profile:", error);
@@ -212,8 +221,9 @@ const ScheduleScreen: React.FC<ScheduleScreenProps> = ({ currentUser }) => {
     const updatedRevenues = [...existingRevenues.filter(r => r.locationId !== revenueData.locationId), revenueData];
     
     try {
-        const revenueRef = doc(db, `users/${currentUser.id}/revenues`, dateKey);
-        await setDoc(revenueRef, { entries: updatedRevenues });
+        // FIX: Use v8 doc/set syntax
+        const revenueRef = db.collection(`users/${currentUser.id}/revenues`).doc(dateKey);
+        await revenueRef.set({ entries: updatedRevenues });
         setRevenues(prev => ({...prev, [dateKey]: updatedRevenues }));
         setIsRevenueEntryVisible(false);
         setSelectedLocationIdForEntry(null);
@@ -227,18 +237,21 @@ const ScheduleScreen: React.FC<ScheduleScreenProps> = ({ currentUser }) => {
     if (!dateKeyForSelectedDay || !currentUser) return;
     if (window.confirm('정말 이 지점의 수익 기록을 삭제하시겠습니까?')) {
         const updatedRevenues = (revenues[dateKeyForSelectedDay] || []).filter(r => r.locationId !== locationId);
-        const revenueRef = doc(db, `users/${currentUser.id}/revenues`, dateKeyForSelectedDay);
+        // FIX: Use v8 doc syntax
+        const revenueRef = db.collection(`users/${currentUser.id}/revenues`).doc(dateKeyForSelectedDay);
         
         try {
             if (updatedRevenues.length === 0) {
-                await deleteDoc(revenueRef);
+                // FIX: Use v8 delete syntax
+                await revenueRef.delete();
                 setRevenues(prev => {
                     const newRevs = {...prev};
                     delete newRevs[dateKeyForSelectedDay];
                     return newRevs;
                 });
             } else {
-                await setDoc(revenueRef, { entries: updatedRevenues });
+                // FIX: Use v8 set syntax
+                await revenueRef.set({ entries: updatedRevenues });
                 setRevenues(prev => ({...prev, [dateKeyForSelectedDay]: updatedRevenues }));
             }
         } catch (error) {

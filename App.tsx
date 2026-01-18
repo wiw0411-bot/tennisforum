@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Post, Category, Comment, Announcement, User, Notification, NotificationType, Advertisement } from './types';
 import { CATEGORIES } from './constants';
@@ -26,8 +27,15 @@ import ArrowLeftIcon from './components/icons/ArrowLeftIcon';
 import AdBanner from './components/AdBanner';
 import EmailVerificationScreen from './components/EmailVerificationScreen';
 import { db, auth } from './firebase'; 
-import { collection, getDocs, Timestamp, addDoc, serverTimestamp, doc, deleteDoc, updateDoc, setDoc, getDoc, writeBatch } from 'firebase/firestore'; 
-import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
+// FIX: The project seems to be using Firebase v8 SDK.
+// Removed v9 modular imports and will use v8 namespaced API.
+import firebase from 'firebase/app';
+import 'firebase/firestore';
+import 'firebase/auth';
+
+const { Timestamp } = firebase.firestore;
+const serverTimestamp = firebase.firestore.FieldValue.serverTimestamp;
+type FirebaseUser = firebase.User;
 
 
 const ADMIN_EMAIL = 'wnxogud12@naver.com';
@@ -42,70 +50,86 @@ const handleFirestoreError = (error: any, context: string) => {
 };
 
 const seedInitialData = async () => {
-    const batch = writeBatch(db);
+    // FIX: Use v8 batch syntax
+    const batch = db.batch();
     let needsCommit = false;
 
     try {
-        const postsRef = collection(db, 'posts');
-        const postsSnapshot = await getDocs(postsRef);
+        // FIX: Use v8 collection/get syntax
+        const postsRef = db.collection('posts');
+        const postsSnapshot = await postsRef.get();
         if (postsSnapshot.empty) {
             console.log("Seeding initial posts...");
             needsCommit = true;
             
-            const jobPostingRef = doc(postsRef);
+            // FIX: Use v8 doc syntax
+            const jobPostingRef = postsRef.doc();
             batch.set(jobPostingRef, {
                 author: '서울테니스클럽', authorId: 'admin_seed', category: Category.JOB_POSTING, location: '서울특별시 강남구', title: '서울테니스클럽',
                 recruitmentField: '테니스', workingType: '풀타임', workingHours: '09:00 ~ 18:00', workingDays: ['월', '화', '수', '목', '금'],
                 salary: '월급 350만원', content: '경력 3년 이상 코치님을 모집합니다. 자세한 내용은 문의 바랍니다.', imageUrl: 'https://i.imgur.com/K2H1KaY.png',
+                // FIX: Use v8 serverTimestamp
                 views: 120, createdAt: serverTimestamp(), commentsAllowed: true,
             });
             
-            const jobSeekingRef = doc(postsRef);
+            // FIX: Use v8 doc syntax
+            const jobSeekingRef = postsRef.doc();
             batch.set(jobSeekingRef, {
                  author: '김코치', authorId: 'user_seed_1', category: Category.JOB_SEEKING, location: '경기도 수원시', title: '[테니스] 선수 10년, 레슨 5년이상 코치 구직',
                  recruitmentField: '테니스', field: '테니스', playerCareer: '10', hasLessonCareer: true, lessonCareer: '5', memberManagementSkill: '상',
                  counselingSkill: '가능', workingType: '풀타임', workingHours: '시간 협의', workingDays: ['요일 협의'], salary: '급여 협의',
+                 // FIX: Use v8 serverTimestamp
                  content: '성실하게 지도하겠습니다. 연락주세요.', views: 88, createdAt: serverTimestamp(), commentsAllowed: true,
             });
 
-            const courtTransferRef = doc(postsRef);
+            // FIX: Use v8 doc syntax
+            const courtTransferRef = postsRef.doc();
             batch.set(courtTransferRef, {
                 author: '코트주인', authorId: 'user_seed_2', category: Category.COURT_TRANSFER, location: '인천광역시 연수구', title: '[인천광역시 연수구] 실내 테니스장 양도',
                 courtType: '실내', area: '150평', monthlyRent: '800만원', premium: '1억 5천만원', content: '시설 깨끗하고 회원 많습니다. 개인 사정으로 급하게 양도합니다.',
+                // FIX: Use v8 serverTimestamp
                 imageUrl: 'https://i.imgur.com/S3yv1sU.png', views: 250, createdAt: serverTimestamp(), commentsAllowed: false,
             });
 
-            const freeBoardRef = doc(postsRef);
+            // FIX: Use v8 doc syntax
+            const freeBoardRef = postsRef.doc();
             batch.set(freeBoardRef, {
                 author: '테니스사랑', authorId: 'user_seed_3', category: Category.FREE_BOARD, location: '', subCategory: '정보 공유',
                 title: '초보자용 라켓 추천해주세요!', content: '테니스 시작한지 얼마 안된 테린이입니다. 입문용으로 괜찮은 라켓 있으면 추천 부탁드립니다!',
+                // FIX: Use v8 serverTimestamp
                 views: 55, createdAt: serverTimestamp(), commentsAllowed: true,
             });
         }
 
-        const announcementsRef = collection(db, 'announcements');
-        const announcementsSnapshot = await getDocs(announcementsRef);
+        // FIX: Use v8 collection/get syntax
+        const announcementsRef = db.collection('announcements');
+        const announcementsSnapshot = await announcementsRef.get();
         if (announcementsSnapshot.empty) {
             console.log("Seeding initial announcements...");
             needsCommit = true;
-            const newAnnouncementRef = doc(announcementsRef);
+            // FIX: Use v8 doc syntax
+            const newAnnouncementRef = announcementsRef.doc();
             batch.set(newAnnouncementRef, {
                 title: '테니스포럼 서비스 정식 오픈!',
                 content: '안녕하세요, 테니스 지도자와 관계자들을 위한 커뮤니티, 테니스포럼입니다. 많은 이용 부탁드립니다.',
+                // FIX: Use v8 serverTimestamp
                 createdAt: serverTimestamp(),
             });
         }
         
-        const advertisementsRef = collection(db, 'advertisements');
-        const advertisementsSnapshot = await getDocs(advertisementsRef);
+        // FIX: Use v8 collection/get syntax
+        const advertisementsRef = db.collection('advertisements');
+        const advertisementsSnapshot = await advertisementsRef.get();
         if (advertisementsSnapshot.empty) {
             console.log("Seeding initial advertisements...");
             needsCommit = true;
-            const newAdRef = doc(advertisementsRef);
+            // FIX: Use v8 doc syntax
+            const newAdRef = advertisementsRef.doc();
             batch.set(newAdRef, {
                 imageUrl: 'https://i.imgur.com/y1mGkUd.png',
                 linkUrl: 'https://tennisforum.ai.kr',
                 isActive: true,
+                // FIX: Use v8 serverTimestamp
                 createdAt: serverTimestamp(),
             });
         }
@@ -146,7 +170,8 @@ const App: React.FC = () => {
   }
   
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (userAuth) => {
+    // FIX: Use v8 onAuthStateChanged syntax
+    const unsubscribe = auth.onAuthStateChanged(async (userAuth) => {
       if (userAuth) {
         if (!userAuth.emailVerified && userAuth.email !== ADMIN_EMAIL) {
             setVerificationEmail(userAuth.email);
@@ -157,18 +182,21 @@ const App: React.FC = () => {
             setPendingVerification(false);
             setVerificationEmail(null);
 
-            const userRef = doc(db, 'users', userAuth.uid);
+            // FIX: Use v8 doc/get syntax
+            const userRef = db.collection('users').doc(userAuth.uid);
             const isKnownAdmin = userAuth.email === ADMIN_EMAIL;
 
             try {
-                let snapshot = await getDoc(userRef);
+                let snapshot = await userRef.get();
                 let userData;
 
-                if (snapshot.exists()) {
+                if (snapshot.exists) {
                     userData = snapshot.data();
                     if (isKnownAdmin && userData.role !== 'admin') {
-                        await updateDoc(userRef, { role: 'admin' });
-                        snapshot = await getDoc(userRef);
+                        // FIX: Use v8 update syntax
+                        await userRef.update({ role: 'admin' });
+                        // FIX: Use v8 get syntax
+                        snapshot = await userRef.get();
                         userData = snapshot.data();
                     }
                 } else {
@@ -180,7 +208,8 @@ const App: React.FC = () => {
                         createdAt: new Date().toISOString(),
                         ...(photoURL && { avatarUrl: photoURL }),
                     };
-                    await setDoc(userRef, newUser);
+                    // FIX: Use v8 set syntax
+                    await userRef.set(newUser);
                     userData = newUser;
                 }
 
@@ -225,13 +254,15 @@ const App: React.FC = () => {
                 advertisementsSnapshot,
                 bookmarksSnapshot
             ] = await Promise.all([
-                getDocs(collection(db, 'posts')),
-                getDocs(collection(db, 'announcements')),
-                getDocs(collection(db, 'advertisements')),
-                getDocs(collection(db, `users/${currentUser.id}/bookmarks`))
+                // FIX: Use v8 collection/get syntax
+                db.collection('posts').get(),
+                db.collection('announcements').get(),
+                db.collection('advertisements').get(),
+                db.collection(`users/${currentUser.id}/bookmarks`).get()
             ]);
 
-            const bookmarkIds = new Set(bookmarksSnapshot.docs.map(doc => doc.id));
+            // FIX: Explicitly type Set to avoid inference issues.
+            const bookmarkIds = new Set<string>(bookmarksSnapshot.docs.map(doc => doc.id));
             setBookmarkedPostIds(bookmarkIds);
             
             const postList = postsSnapshot.docs.map(doc => {
@@ -265,7 +296,8 @@ const App: React.FC = () => {
             setAdvertisements(adList.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
 
             if (currentUser.role === 'admin') {
-                const usersSnapshot = await getDocs(collection(db, 'users'));
+                // FIX: Use v8 collection/get syntax
+                const usersSnapshot = await db.collection('users').get();
                 const userList = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
                 setUsers(userList);
             } else {
@@ -333,7 +365,8 @@ const App: React.FC = () => {
   const bookmarkedPosts = useMemo(() => postsWithBookmarks.filter(p => p.isBookmarked), [postsWithBookmarks]);
 
   const handleLogout = useCallback(async () => {
-    await signOut(auth);
+    // FIX: Use v8 signOut syntax
+    await auth.signOut();
     setActiveTab('home');
     setHomeView('dashboard');
     setCurrentScreen('list');
@@ -354,8 +387,9 @@ const App: React.FC = () => {
     const userId = currentUser.id;
 
     try {
-        const userRef = doc(db, 'users', userId);
-        await updateDoc(userRef, { name, avatarUrl });
+        // FIX: Use v8 doc/update syntax
+        const userRef = db.collection('users').doc(userId);
+        await userRef.update({ name, avatarUrl });
 
         setCurrentUser(prev => prev ? { ...prev, name, avatarUrl } : null);
         setIsEditingProfile(false);
@@ -366,8 +400,9 @@ const App: React.FC = () => {
 
   const handleSelectPost = useCallback((postToSelect: Post) => {
     try {
-        const postRef = doc(db, 'posts', postToSelect.id);
-        updateDoc(postRef, { views: (postToSelect.views || 0) + 1 });
+        // FIX: Use v8 doc/update syntax
+        const postRef = db.collection('posts').doc(postToSelect.id);
+        postRef.update({ views: (postToSelect.views || 0) + 1 });
         
         const updatedPost = { ...postToSelect, views: (postToSelect.views || 0) + 1 };
         setPosts(prevPosts => prevPosts.map(p => p.id === postToSelect.id ? updatedPost : p));
@@ -389,15 +424,18 @@ const App: React.FC = () => {
     }
 
     const newBookmarkedIds = new Set(bookmarkedPostIds);
-    const bookmarkRef = doc(db, `users/${currentUser.id}/bookmarks`, postId);
+    // FIX: Use v8 doc syntax
+    const bookmarkRef = db.collection('users').doc(currentUser.id).collection('bookmarks').doc(postId);
     
     try {
         if (newBookmarkedIds.has(postId)) {
             newBookmarkedIds.delete(postId);
-            await deleteDoc(bookmarkRef);
+            // FIX: Use v8 delete syntax
+            await bookmarkRef.delete();
         } else {
             newBookmarkedIds.add(postId);
-            await setDoc(bookmarkRef, {});
+            // FIX: Use v8 set syntax
+            await bookmarkRef.set({});
         }
         setBookmarkedPostIds(newBookmarkedIds);
     } catch (error) {
@@ -418,8 +456,9 @@ const App: React.FC = () => {
           setEditingPost(null);
           
           try {
-              const postRef = doc(db, 'posts', postId);
-              await deleteDoc(postRef);
+              // FIX: Use v8 doc/delete syntax
+              const postRef = db.collection('posts').doc(postId);
+              await postRef.delete();
           } catch (error) {
               setPosts(prev => [...prev, postToDelete].sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
               handleFirestoreError(error, "게시물 삭제");
@@ -433,8 +472,10 @@ const App: React.FC = () => {
 
   const handleCreateAnnouncement = useCallback(async (newAnnouncement: Omit<Announcement, 'id' | 'createdAt'>) => {
     try {
+        // FIX: Use v8 serverTimestamp
         const dataToSave = { ...newAnnouncement, createdAt: serverTimestamp() };
-        const docRef = await addDoc(collection(db, 'announcements'), dataToSave);
+        // FIX: Use v8 collection/add syntax
+        const docRef = await db.collection('announcements').add(dataToSave);
         
         const announcementToAdd: Announcement = {
             id: docRef.id,
@@ -452,7 +493,8 @@ const App: React.FC = () => {
         const originalAnnouncements = announcements;
         setAnnouncements(prev => prev.filter(a => a.id !== announcementId));
         try {
-            await deleteDoc(doc(db, 'announcements', announcementId));
+            // FIX: Use v8 doc/delete syntax
+            await db.collection('announcements').doc(announcementId).delete();
         } catch (error) {
             setAnnouncements(originalAnnouncements);
             handleFirestoreError(error, "공지사항 삭제");
@@ -465,9 +507,11 @@ const App: React.FC = () => {
         const dataToSave = {
             ...newAdData,
             isActive: true,
+            // FIX: Use v8 serverTimestamp
             createdAt: serverTimestamp(),
         };
-        const docRef = await addDoc(collection(db, 'advertisements'), dataToSave);
+        // FIX: Use v8 collection/add syntax
+        const docRef = await db.collection('advertisements').add(dataToSave);
         const adToAdd: Advertisement = {
             id: docRef.id,
             ...newAdData,
@@ -484,7 +528,8 @@ const App: React.FC = () => {
       const originalAdvertisements = advertisements;
       setAdvertisements(prev => prev.map(ad => ad.id === adId ? { ...ad, ...updates } : ad));
       try {
-          await updateDoc(doc(db, 'advertisements', adId), updates);
+          // FIX: Use v8 doc/update syntax
+          await db.collection('advertisements').doc(adId).update(updates);
       } catch (error) {
           setAdvertisements(originalAdvertisements);
           handleFirestoreError(error, "광고 업데이트");
@@ -496,7 +541,8 @@ const App: React.FC = () => {
           const originalAdvertisements = advertisements;
           setAdvertisements(prev => prev.filter(ad => ad.id !== adId));
           try {
-              await deleteDoc(doc(db, 'advertisements', adId));
+              // FIX: Use v8 doc/delete syntax
+              await db.collection('advertisements').doc(adId).delete();
           } catch (error) {
               setAdvertisements(originalAdvertisements);
               handleFirestoreError(error, "광고 삭제");
@@ -530,12 +576,15 @@ const App: React.FC = () => {
       author: newPostData.category === Category.JOB_SEEKING ? currentUser.name : newPostData.title,
       authorAvatar: currentUser.avatarUrl,
       views: 0,
+      // FIX: Use v8 serverTimestamp
       createdAt: serverTimestamp(),
     };
 
     try {
-      const postsCollection = collection(db, 'posts');
-      const docRef = await addDoc(postsCollection, dataToSave as { [x: string]: any });
+      // FIX: Use v8 collection syntax
+      const postsCollection = db.collection('posts');
+      // FIX: Use v8 add syntax
+      const docRef = await postsCollection.add(dataToSave as { [x: string]: any });
 
       const postToAdd: Post = {
         id: docRef.id,
@@ -569,9 +618,11 @@ const App: React.FC = () => {
   const handleUpdatePost = useCallback(async (updatedPostData: Omit<Post, 'id' | 'createdAt' | 'views'>) => {
     if (!editingPost) return;
 
-    const postRef = doc(db, 'posts', editingPost.id);
+    // FIX: Use v8 doc syntax
+    const postRef = db.collection('posts').doc(editingPost.id);
     try {
-        await updateDoc(postRef, updatedPostData as { [x: string]: any });
+        // FIX: Use v8 update syntax
+        await postRef.update(updatedPostData as { [x: string]: any });
 
         const updatedPost = { ...editingPost, ...updatedPostData };
         setPosts(prevPosts => prevPosts.map(p => p.id === editingPost.id ? updatedPost : p));
@@ -775,7 +826,8 @@ const App: React.FC = () => {
   }
   
   if (pendingVerification) {
-    return <EmailVerificationScreen email={verificationEmail} onBackToLogin={() => signOut(auth)} />;
+    // FIX: Use v8 signOut syntax
+    return <EmailVerificationScreen email={verificationEmail} onBackToLogin={() => auth.signOut()} />;
   }
 
   if (!isAuthenticated) {

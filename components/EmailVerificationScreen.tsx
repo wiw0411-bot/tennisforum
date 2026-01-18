@@ -1,7 +1,9 @@
 
+
 import React, { useState } from 'react';
 import { auth } from '../firebase';
-import { sendEmailVerification } from 'firebase/auth';
+// FIX: The project seems to be using Firebase v8 SDK.
+// Removed v9 modular import for auth.
 import MailIcon from './icons/MailIcon';
 
 interface EmailVerificationScreenProps {
@@ -18,7 +20,8 @@ const EmailVerificationScreen: React.FC<EmailVerificationScreenProps> = ({ email
         setIsSending(true);
         setMessage('');
         try {
-            await sendEmailVerification(auth.currentUser);
+            // FIX: Use v8 sendEmailVerification syntax
+            await auth.currentUser.sendEmailVerification();
             setMessage('인증 이메일을 다시 보냈습니다. 받은편지함을 확인해주세요.');
         } catch (error) {
             setMessage('이메일 재전송에 실패했습니다. 잠시 후 다시 시도해주세요.');

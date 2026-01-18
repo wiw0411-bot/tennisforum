@@ -1,9 +1,10 @@
-// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
-import { getAuth } from "firebase/auth";
-import { getAnalytics } from "firebase/analytics";
-import { getStorage } from "firebase/storage";
+// FIX: The project seems to be using Firebase v8 SDK.
+// The imports and initialization logic are updated to v8 compatibility syntax.
+import firebase from "firebase/app";
+import "firebase/auth";
+import "firebase/analytics";
+import "firebase/firestore";
+import "firebase/storage";
 
 // Your web app's Firebase configuration from your project settings
 const firebaseConfig = {
@@ -18,10 +19,10 @@ const firebaseConfig = {
 
 
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
+const app = firebase.initializeApp(firebaseConfig);
 
 // Export the necessary Firebase services for your app to use
-export const db = getFirestore(app);
-export const auth = getAuth(app);
-export const storage = getStorage(app);
-export const analytics = getAnalytics(app);
+export const db = app.firestore();
+export const auth = app.auth();
+export const storage = app.storage();
+export const analytics = app.analytics();
