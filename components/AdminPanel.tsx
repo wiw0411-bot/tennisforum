@@ -1,3 +1,5 @@
+
+
 import React, { useState, useMemo, useRef } from 'react';
 import { Post, Announcement, User, Advertisement } from '../types';
 import PowerIcon from './icons/PowerIcon';
@@ -217,7 +219,11 @@ const AnnouncementManagement: React.FC<{ announcements: Announcement[], onCreate
             alert('제목과 내용을 모두 입력해주세요.');
             return;
         }
-        onCreateAnnouncement({ title, content, imageUrl: imageUrl || undefined });
+        const announcementData: Omit<Announcement, 'id' | 'createdAt'> = { title, content };
+        if (imageUrl) {
+          announcementData.imageUrl = imageUrl;
+        }
+        onCreateAnnouncement(announcementData);
         setTitle('');
         setContent('');
         setImageUrl('');
@@ -243,8 +249,8 @@ const AnnouncementManagement: React.FC<{ announcements: Announcement[], onCreate
             <h3 className="text-xl font-bold text-gray-800 mb-4">공지사항 관리</h3>
             <div className="bg-white p-6 rounded-lg shadow-md border border-gray-200">
                 <form onSubmit={handleSubmit} className="space-y-4">
-                    <input type="text" placeholder="제목" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-gray-100 border-gray-300 rounded-md shadow-sm focus:border-[#ff5710] focus:ring-[#ff5710]"/>
-                    <textarea placeholder="내용" value={content} onChange={e => setContent(e.target.value)} rows={4} className="w-full bg-gray-100 border-gray-300 rounded-md shadow-sm focus:border-[#ff5710] focus:ring-[#ff5710]"></textarea>
+                    <input type="text" placeholder="제목" value={title} onChange={e => setTitle(e.target.value)} className="w-full bg-gray-100 border-gray-300 rounded-md shadow-sm focus:border-[#ff5710] focus:ring-[#ff5710] text-gray-900 placeholder-gray-500"/>
+                    <textarea placeholder="내용" value={content} onChange={e => setContent(e.target.value)} rows={4} className="w-full bg-gray-100 border-gray-300 rounded-md shadow-sm focus:border-[#ff5710] focus:ring-[#ff5710] text-gray-900 placeholder-gray-500"></textarea>
                     
                     <div className="flex items-center space-x-4">
                         <button type="button" onClick={() => fileInputRef.current?.click()} className="flex items-center px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-md hover:bg-gray-200">
@@ -312,11 +318,11 @@ const AdManagement: React.FC<{
         <form onSubmit={handleSubmit} className="space-y-4">
            <div>
               <label htmlFor="ad-image-url" className="text-sm font-medium text-gray-700">이미지 URL</label>
-              <input id="ad-image-url" type="text" placeholder="https://example.com/image.png" value={newImageUrl} onChange={e => setNewImageUrl(e.target.value)} className="mt-1 w-full bg-gray-100 border-gray-300 rounded-md shadow-sm focus:border-[#ff5710] focus:ring-[#ff5710]"/>
+              <input id="ad-image-url" type="text" placeholder="https://example.com/image.png" value={newImageUrl} onChange={e => setNewImageUrl(e.target.value)} className="mt-1 w-full bg-gray-100 border-gray-300 rounded-md shadow-sm focus:border-[#ff5710] focus:ring-[#ff5710] text-gray-900 placeholder-gray-500"/>
            </div>
            <div>
               <label htmlFor="ad-link-url" className="text-sm font-medium text-gray-700">연결 링크 (선택사항)</label>
-              <input id="ad-link-url" type="text" placeholder="https://example.com/promotion" value={newLinkUrl} onChange={e => setNewLinkUrl(e.target.value)} className="mt-1 w-full bg-gray-100 border-gray-300 rounded-md shadow-sm focus:border-[#ff5710] focus:ring-[#ff5710]"/>
+              <input id="ad-link-url" type="text" placeholder="https://example.com/promotion" value={newLinkUrl} onChange={e => setNewLinkUrl(e.target.value)} className="mt-1 w-full bg-gray-100 border-gray-300 rounded-md shadow-sm focus:border-[#ff5710] focus:ring-[#ff5710] text-gray-900 placeholder-gray-500"/>
            </div>
           <button type="submit" className="w-full bg-[#ff5710] text-white font-bold py-2 rounded-md hover:bg-[#e64e0e]">새 광고 등록</button>
         </form>

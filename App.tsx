@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Post, Category, Comment, Announcement, User, Notification, NotificationType, Advertisement } from './types';
 import { CATEGORIES } from './constants';
@@ -40,17 +41,17 @@ const handleFirestoreError = (error: any, context: string) => {
     }
 };
 
-const seedInitialData = async (currentUser: User | null) => {
-    // 1. Seed Posts (accessible to all users)
+const seedInitialData = async () => {
+    const batch = writeBatch(db);
+    let needsCommit = false;
+
     try {
         const postsRef = collection(db, 'posts');
         const postsSnapshot = await getDocs(postsRef);
-        
         if (postsSnapshot.empty) {
             console.log("Seeding initial posts...");
-            const batch = writeBatch(db);
-
-            // Job Posting
+            needsCommit = true;
+            
             const jobPostingRef = doc(postsRef);
             batch.set(jobPostingRef, {
                 author: '서울테니스클럽', authorId: 'admin_seed', category: Category.JOB_POSTING, location: '서울특별시 강남구', title: '서울테니스클럽',
@@ -59,7 +60,6 @@ const seedInitialData = async (currentUser: User | null) => {
                 views: 120, createdAt: serverTimestamp(), commentsAllowed: true,
             });
             
-            // Job Seeking
             const jobSeekingRef = doc(postsRef);
             batch.set(jobSeekingRef, {
                  author: '김코치', authorId: 'user_seed_1', category: Category.JOB_SEEKING, location: '경기도 수원시', title: '[테니스] 선수 10년, 레슨 5년이상 코치 구직',
@@ -68,7 +68,6 @@ const seedInitialData = async (currentUser: User | null) => {
                  content: '성실하게 지도하겠습니다. 연락주세요.', views: 88, createdAt: serverTimestamp(), commentsAllowed: true,
             });
 
-            // Court Transfer
             const courtTransferRef = doc(postsRef);
             batch.set(courtTransferRef, {
                 author: '코트주인', authorId: 'user_seed_2', category: Category.COURT_TRANSFER, location: '인천광역시 연수구', title: '[인천광역시 연수구] 실내 테니스장 양도',
@@ -76,54 +75,46 @@ const seedInitialData = async (currentUser: User | null) => {
                 imageUrl: 'https://i.imgur.com/S3yv1sU.png', views: 250, createdAt: serverTimestamp(), commentsAllowed: false,
             });
 
-            // Free Board
             const freeBoardRef = doc(postsRef);
             batch.set(freeBoardRef, {
                 author: '테니스사랑', authorId: 'user_seed_3', category: Category.FREE_BOARD, location: '', subCategory: '정보 공유',
                 title: '초보자용 라켓 추천해주세요!', content: '테니스 시작한지 얼마 안된 테린이입니다. 입문용으로 괜찮은 라켓 있으면 추천 부탁드립니다!',
                 views: 55, createdAt: serverTimestamp(), commentsAllowed: true,
             });
+        }
 
+        const announcementsRef = collection(db, 'announcements');
+        const announcementsSnapshot = await getDocs(announcementsRef);
+        if (announcementsSnapshot.empty) {
+            console.log("Seeding initial announcements...");
+            needsCommit = true;
+            const newAnnouncementRef = doc(announcementsRef);
+            batch.set(newAnnouncementRef, {
+                title: '테니스포럼 서비스 정식 오픈!',
+                content: '안녕하세요, 테니스 지도자와 관계자들을 위한 커뮤니티, 테니스포럼입니다. 많은 이용 부탁드립니다.',
+                createdAt: serverTimestamp(),
+            });
+        }
+        
+        const advertisementsRef = collection(db, 'advertisements');
+        const advertisementsSnapshot = await getDocs(advertisementsRef);
+        if (advertisementsSnapshot.empty) {
+            console.log("Seeding initial advertisements...");
+            needsCommit = true;
+            const newAdRef = doc(advertisementsRef);
+            batch.set(newAdRef, {
+                imageUrl: 'https://i.imgur.com/y1mGkUd.png',
+                linkUrl: 'https://tennisforum.ai.kr',
+                isActive: true,
+                createdAt: serverTimestamp(),
+            });
+        }
+
+        if (needsCommit) {
             await batch.commit();
         }
     } catch (error) {
-        handleFirestoreError(error, "초기 게시물 생성");
-    }
-
-    // 2. Seed Admin-only data (Announcements & Ads)
-    if (currentUser?.role === 'admin') {
-        // Seed announcements
-        try {
-            const announcementsRef = collection(db, 'announcements');
-            const announcementsSnapshot = await getDocs(announcementsRef);
-            if (announcementsSnapshot.empty) {
-                console.log("Seeding initial announcements as admin...");
-                await addDoc(announcementsRef, {
-                    title: '테니스포럼 서비스 정식 오픈!',
-                    content: '안녕하세요, 테니스 지도자와 관계자들을 위한 커뮤니티, 테니스포럼입니다. 많은 이용 부탁드립니다.',
-                    createdAt: serverTimestamp(),
-                });
-            }
-        } catch (error) {
-            handleFirestoreError(error, "초기 공지사항 생성");
-        }
-        
-        // Seed advertisements
-        try {
-            const advertisementsRef = collection(db, 'advertisements');
-            const advertisementsSnapshot = await getDocs(advertisementsRef);
-            if (advertisementsSnapshot.empty) {
-                console.log("Seeding initial advertisements as admin...");
-                await addDoc(advertisementsRef, {
-                    imageUrl: 'https://i.imgur.com/y1mGkUd.png',
-                    linkUrl: 'https://tennisforum.ai.kr',
-                    isActive: true,
-                    createdAt: serverTimestamp(),
-                });
-            }
-        } catch (error) {
-            handleFirestoreError(error, "초기 광고 생성");
-        }
+        handleFirestoreError(error, "초기 데이터 생성");
     }
 };
 
@@ -153,11 +144,11 @@ const App: React.FC = () => {
       setUsers([]);
       setBookmarkedPostIds(new Set());
   }
-
+  
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (userAuth) => {
       if (userAuth) {
-        if (!userAuth.emailVerified) {
+        if (!userAuth.emailVerified && userAuth.email !== ADMIN_EMAIL) {
             setVerificationEmail(userAuth.email);
             setPendingVerification(true);
             setIsAuthenticated(false);
@@ -175,27 +166,22 @@ const App: React.FC = () => {
 
                 if (snapshot.exists()) {
                     userData = snapshot.data();
-                    // If an existing user logs in with the admin email, but their role is not 'admin' yet, update it.
                     if (isKnownAdmin && userData.role !== 'admin') {
                         await updateDoc(userRef, { role: 'admin' });
-                        // Re-fetch the snapshot to ensure we have the most up-to-date data before setting state.
                         snapshot = await getDoc(userRef);
                         userData = snapshot.data();
                     }
                 } else {
-                    // This block handles new users, especially from social logins.
-                    const isSocialLogin = userAuth.providerData.some(p => p.providerId !== 'password');
-                    if (isSocialLogin) {
-                        const { displayName, email, photoURL } = userAuth;
-                        const newUser: Omit<User, 'id'> = {
-                            name: displayName || email?.split('@')[0] || '새 사용자',
-                            role: isKnownAdmin ? 'admin' : 'user',
-                            createdAt: new Date().toISOString(),
-                            ...(photoURL && { avatarUrl: photoURL }),
-                        };
-                        await setDoc(userRef, newUser);
-                        userData = newUser;
-                    }
+                    console.warn(`User document not found for uid: ${userAuth.uid}. Creating new document.`);
+                    const { displayName, email, photoURL } = userAuth;
+                    const newUser: Omit<User, 'id'> = {
+                        name: displayName || email?.split('@')[0] || '새 사용자',
+                        role: isKnownAdmin ? 'admin' : 'user',
+                        createdAt: new Date().toISOString(),
+                        ...(photoURL && { avatarUrl: photoURL }),
+                    };
+                    await setDoc(userRef, newUser);
+                    userData = newUser;
                 }
 
                 if (userData) {
@@ -203,12 +189,10 @@ const App: React.FC = () => {
                     setCurrentUser(userForState);
                     setIsAuthenticated(true);
                 } else {
-                    // If for some reason userData is still undefined (e.g., non-social new user), sign out.
-                    await signOut(auth);
+                    console.error("Could not retrieve or create user data.");
                 }
             } catch (error) {
                 handleFirestoreError(error, "사용자 정보 처리");
-                await signOut(auth);
             }
         }
       } else {
@@ -224,7 +208,7 @@ const App: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    const fetchAllDataAndBookmarks = async () => {
+    const fetchAllData = async () => {
         if (!currentUser) {
             clearData();
             setIsDataLoading(false);
@@ -233,12 +217,8 @@ const App: React.FC = () => {
 
         setIsDataLoading(true);
         try {
-            // Step 1: Seed data ONLY if admin. This will now work because the user's role in Firestore is correct.
-            if (currentUser.role === 'admin') {
-                await seedInitialData(currentUser);
-            }
+            await seedInitialData();
 
-            // Step 2: Fetch all public data and user-specific bookmarks in parallel.
             const [
                 postsSnapshot, 
                 announcementsSnapshot, 
@@ -248,14 +228,12 @@ const App: React.FC = () => {
                 getDocs(collection(db, 'posts')),
                 getDocs(collection(db, 'announcements')),
                 getDocs(collection(db, 'advertisements')),
-                getDocs(collection(db, `user_activities/${currentUser.id}/bookmarks`))
+                getDocs(collection(db, `users/${currentUser.id}/bookmarks`))
             ]);
 
-            // Step 3: Process bookmarks.
             const bookmarkIds = new Set(bookmarksSnapshot.docs.map(doc => doc.id));
             setBookmarkedPostIds(bookmarkIds);
             
-            // Step 4: Process other data (posts, announcements, ads).
             const postList = postsSnapshot.docs.map(doc => {
                 const data = doc.data();
                 return { 
@@ -286,7 +264,6 @@ const App: React.FC = () => {
             });
             setAdvertisements(adList.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
 
-            // Step 5: Fetch all users ONLY if admin.
             if (currentUser.role === 'admin') {
                 const usersSnapshot = await getDocs(collection(db, 'users'));
                 const userList = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
@@ -302,7 +279,7 @@ const App: React.FC = () => {
         }
     };
     
-    fetchAllDataAndBookmarks();
+    fetchAllData();
   }, [currentUser]);
 
   const [viewingPrivacyPolicy, setViewingPrivacyPolicy] = useState(false);
@@ -412,7 +389,7 @@ const App: React.FC = () => {
     }
 
     const newBookmarkedIds = new Set(bookmarkedPostIds);
-    const bookmarkRef = doc(db, `user_activities/${currentUser.id}/bookmarks`, postId);
+    const bookmarkRef = doc(db, `users/${currentUser.id}/bookmarks`, postId);
     
     try {
         if (newBookmarkedIds.has(postId)) {
@@ -640,7 +617,7 @@ const App: React.FC = () => {
 
 
   const renderContent = () => {
-    if (isDataLoading) {
+    if (isAuthLoading || isDataLoading) {
        return <div className="flex h-full items-center justify-center"><p>데이터를 불러오는 중...</p></div>;
     }
     if (selectedPost) {
@@ -773,6 +750,17 @@ const App: React.FC = () => {
   if (showSplashScreen) {
     return <div className="bg-white h-full font-sans w-full max-w-md mx-auto flex flex-col overflow-hidden border border-gray-100 shadow-lg relative"><SplashScreen onFinish={handleSplashFinish} /></div>;
   }
+  
+  if (isAuthLoading) {
+     return (
+        <div className="bg-white h-full font-sans w-full max-w-md mx-auto flex flex-col overflow-hidden border border-gray-100 shadow-lg relative">
+            <div className="flex h-full items-center justify-center">
+                <p>인증 정보를 확인하는 중...</p>
+            </div>
+        </div>
+     );
+  }
+
   if (viewingPrivacyPolicy) {
     return <div className="bg-white h-full font-sans w-full max-w-md mx-auto flex flex-col overflow-hidden border border-gray-100 shadow-lg relative"><PrivacyPolicy onBack={handleHidePrivacyPolicy} /></div>;
   }
@@ -784,10 +772,6 @@ const App: React.FC = () => {
   }
   if (isEditingProfile && currentUser) {
       return <div className="bg-white h-full font-sans w-full max-w-md mx-auto flex flex-col overflow-hidden border border-gray-100 shadow-lg relative"><ProfileEditScreen currentUser={currentUser} onBack={handleHideProfileEdit} onSave={handleUpdateProfile} /></div>;
-  }
-
-  if (isAuthLoading) {
-     return <div className="bg-white h-full font-sans w-full max-w-md mx-auto flex flex-col overflow-hidden border border-gray-100 shadow-lg relative"><div className="flex h-full items-center justify-center"><p>인증 정보를 확인하는 중...</p></div></div>;
   }
   
   if (pendingVerification) {

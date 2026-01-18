@@ -1,13 +1,15 @@
 
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { auth, db } from '../firebase';
 import { 
   createUserWithEmailAndPassword, 
   signInWithEmailAndPassword,
   sendEmailVerification,
+  fetchSignInMethodsForEmail,
   User as FirebaseUser,
 } from 'firebase/auth';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, setDoc, getDoc } from 'firebase/firestore';
 import { User } from '../types';
 
 import { loginBackgroundImage } from '../assets/imageAssets';
@@ -30,6 +32,19 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onShowPrivacyPolicy, onShowTe
   const [nickname, setNickname] = useState('');
   const [phone, setPhone] = useState('');
   const [errors, setErrors] = useState<{ [key: string]: string }>({});
+
+  // Email check states
+  const [isEmailChecked, setIsEmailChecked] = useState(false);
+  const [isEmailAvailable, setIsEmailAvailable] = useState(false);
+  const [emailCheckMessage, setEmailCheckMessage] = useState('');
+  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
+  
+  // Nickname check states
+  const [isNicknameChecked, setIsNicknameChecked] = useState(false);
+  const [isNicknameAvailable, setIsNicknameAvailable] = useState(false);
+  const [nicknameCheckMessage, setNicknameCheckMessage] = useState('');
+  const [isCheckingNickname, setIsCheckingNickname] = useState(false);
+
 
   useEffect(() => {
     if (isLoginView) {
@@ -72,13 +87,78 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onShowPrivacyPolicy, onShowTe
   const handleNicknameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setNickname(value);
+    setIsNicknameChecked(false);
+    setIsNicknameAvailable(false);
+    setNicknameCheckMessage('');
   };
   
   const isSignUpFormValid = useMemo(() => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     const isEmailValid = emailRegex.test(email);
-    return isEmailValid && phone && password && passwordConfirm && nickname && Object.keys(errors).length === 0;
-  }, [email, password, passwordConfirm, nickname, phone, errors]);
+    return isEmailValid && isEmailChecked && isEmailAvailable &&
+           isNicknameChecked && isNicknameAvailable &&
+           phone && password && passwordConfirm && nickname && Object.keys(errors).length === 0;
+  }, [email, password, passwordConfirm, nickname, phone, errors, isEmailChecked, isEmailAvailable, isNicknameChecked, isNicknameAvailable]);
+
+  const handleEmailCheck = async () => {
+    if (!email || isCheckingEmail) return;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        setEmailCheckMessage('올바른 이메일 형식이 아닙니다.');
+        return;
+    }
+
+    setIsCheckingEmail(true);
+    setEmailCheckMessage('');
+    try {
+        const methods = await fetchSignInMethodsForEmail(auth, email);
+        if (methods.length > 0) {
+            setEmailCheckMessage('이미 사용 중인 이메일입니다.');
+            setIsEmailAvailable(false);
+        } else {
+            setEmailCheckMessage('사용 가능한 이메일입니다.');
+            setIsEmailAvailable(true);
+        }
+        setIsEmailChecked(true);
+    } catch (error) {
+        console.error("Email check error:", error);
+        setEmailCheckMessage('중복 확인 중 오류가 발생했습니다.');
+        setIsEmailAvailable(false);
+    } finally {
+        setIsCheckingEmail(false);
+    }
+  };
+  
+  const handleNicknameCheck = async () => {
+    const trimmedNickname = nickname.trim();
+    if (!trimmedNickname || isCheckingNickname) return;
+    if (errors.nickname) {
+        setNicknameCheckMessage(errors.nickname);
+        return;
+    }
+
+    setIsCheckingNickname(true);
+    setNicknameCheckMessage('');
+    try {
+        const usersRef = collection(db, 'users');
+        const q = query(usersRef, where("name", "==", trimmedNickname));
+        const querySnapshot = await getDocs(q);
+        if (!querySnapshot.empty) {
+            setNicknameCheckMessage('이미 사용 중인 닉네임입니다.');
+            setIsNicknameAvailable(false);
+        } else {
+            setNicknameCheckMessage('사용 가능한 닉네임입니다.');
+            setIsNicknameAvailable(true);
+        }
+        setIsNicknameChecked(true);
+    } catch (error) {
+        console.error("Nickname check error:", error);
+        setNicknameCheckMessage('중복 확인 중 오류가 발생했습니다.');
+        setIsNicknameAvailable(false);
+    } finally {
+        setIsCheckingNickname(false);
+    }
+  };
 
 
   const createUserProfileDocument = async (userAuth: FirebaseUser, additionalData: { name: string; phone: string }) => {
@@ -125,6 +205,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onShowPrivacyPolicy, onShowTe
         return;
       }
       try {
+        auth.languageCode = 'ko'; // Set language before sending email
         const { user } = await createUserWithEmailAndPassword(auth, email, password);
         await createUserProfileDocument(user, { name: nickname, phone });
         await sendEmailVerification(user);
@@ -179,7 +260,34 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onShowPrivacyPolicy, onShowTe
       {apiError && <p className="text-red-500 text-xs text-center mb-3">{apiError}</p>}
       <form onSubmit={handleEmailAuth} className="space-y-2">
           <div>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="이메일" required className="w-full h-12 px-4 rounded-xl bg-gray-100 border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff5710] text-gray-900 placeholder-gray-500" />
+            <div className="flex items-center space-x-2">
+                <input 
+                    type="email" 
+                    value={email} 
+                    onChange={e => { 
+                        setEmail(e.target.value); 
+                        setIsEmailChecked(false);
+                        setIsEmailAvailable(false);
+                        setEmailCheckMessage('');
+                    }} 
+                    placeholder="이메일" 
+                    required 
+                    className="flex-grow w-full h-12 px-4 rounded-xl bg-gray-100 border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff5710] text-gray-900 placeholder-gray-500" 
+                />
+                <button 
+                    type="button" 
+                    onClick={handleEmailCheck}
+                    disabled={isCheckingEmail || !email}
+                    className="flex-shrink-0 h-12 px-4 rounded-xl bg-gray-200 text-gray-700 text-xs font-bold hover:bg-gray-300 disabled:opacity-50"
+                >
+                    {isCheckingEmail ? '확인 중...' : '중복확인'}
+                </button>
+            </div>
+            {emailCheckMessage && (
+                <p className={`text-xs mt-1 px-2 ${isEmailAvailable ? 'text-green-600' : 'text-red-500'}`}>
+                    {emailCheckMessage}
+                </p>
+            )}
           </div>
           <div>
             <input type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="비밀번호 (8자 이상, 특수문자 포함)" required className="w-full h-12 px-4 rounded-xl bg-gray-100 border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff5710] text-gray-900 placeholder-gray-500" />
@@ -190,8 +298,20 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onShowPrivacyPolicy, onShowTe
             {errors.passwordConfirm && <p className="text-red-500 text-xs mt-1 px-2">{errors.passwordConfirm}</p>}
           </div>
           <div>
-            <input type="text" value={nickname} onChange={handleNicknameChange} placeholder="닉네임 (한글 5자 / 영문 10자)" required className="w-full h-12 px-4 rounded-xl bg-gray-100 border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff5710] text-gray-900 placeholder-gray-500" />
-            {errors.nickname && <p className="text-red-500 text-xs mt-1 px-2">{errors.nickname}</p>}
+             <div className="flex items-center space-x-2">
+                <input type="text" value={nickname} onChange={handleNicknameChange} placeholder="닉네임 (한글 5자 / 영문 10자)" required className="flex-grow w-full h-12 px-4 rounded-xl bg-gray-100 border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff5710] text-gray-900 placeholder-gray-500" />
+                <button 
+                    type="button" 
+                    onClick={handleNicknameCheck}
+                    disabled={isCheckingNickname || !nickname || !!errors.nickname}
+                    className="flex-shrink-0 h-12 px-4 rounded-xl bg-gray-200 text-gray-700 text-xs font-bold hover:bg-gray-300 disabled:opacity-50"
+                >
+                    {isCheckingNickname ? '확인 중...' : '중복확인'}
+                </button>
+             </div>
+             {errors.nickname ? <p className="text-red-500 text-xs mt-1 px-2">{errors.nickname}</p> : 
+                nicknameCheckMessage && <p className={`text-xs mt-1 px-2 ${isNicknameAvailable ? 'text-green-600' : 'text-red-500'}`}>{nicknameCheckMessage}</p>
+             }
           </div>
           <div>
             <input type="tel" value={phone} onChange={handlePhoneChange} placeholder="연락처 (11자리, - 제외)" required className="w-full h-12 px-4 rounded-xl bg-gray-100 border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff5710] text-gray-900 placeholder-gray-500" />

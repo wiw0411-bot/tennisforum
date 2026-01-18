@@ -1,72 +1,94 @@
 
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-  
-    // Users Collection
-    // - Authenticated users can read any user's public profile.
-    // - A user can create their own profile upon signup.
-    // - A user can update their own profile.
+
+    // --- Helper Functions ---
+    
+    // 사용자가 로그인했는지 확인하는 함수
+    functionisSignedIn() {
+      return request.auth != null;
+    }
+
+    // 사용자가 관리자인지 확인하는 함수
+    // 사용자 문서가 존재하고, 해당 문서의 role 필드가 'admin'인지 확인합니다.
+    function isAdmin() {
+      returnisSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // --- User Profiles ---
     match /users/{userId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth.uid == userId;
-      allow update: if request.auth.uid == userId;
+      // 모든 로그인 사용자가 다른 사용자의 프로필을 조회할 수 있습니다 (게시물 작성자 정보 등).
+      allow get: ifisSignedIn();
+      // 관리자만 전체 사용자 목록을 가져올 수 있습니다.
+      allow list: if isAdmin();
+      
+      // 사용자는 자신의 사용자 문서만 생성할 수 있습니다.
+      // 생성 시 스스로 'admin' 역할을 부여하는 것을 방지합니다.
+      allow create: if request.auth.uid == userId 
+                    && request.resource.data.role == 'user';
+      
+      // 사용자는 자신의 정보만 업데이트할 수 있으며, 'role' 필드는 변경할 수 없습니다.
+      // 관리자는 모든 사용자의 정보를 업데이트할 수 있습니다.
+      allow update: if (request.auth.uid == userId && request.resource.data.role == resource.data.role)
+                    || isAdmin();
     }
 
-    // Posts Collection
-    // - Authenticated users can read all posts.
-    // - Authenticated users can create new posts.
-    // - A user can update or delete their own posts.
-    // - An admin can update or delete any post.
+    // --- Posts and Comments ---
     match /posts/{postId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null;
-      allow update, delete: if request.auth != null && (resource.data.authorId == request.auth.uid || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
-    }
-    
-    // Comments Subcollection within Posts
-    // - Authenticated users can read all comments for a post.
-    // - Authenticated users can create comments.
-    // - A user can delete their own comment.
-    // - An admin or the post author can delete any comment.
-    match /posts/{postId}/comments/{commentId} {
-      allow read, create: if request.auth != null;
-      allow delete: if request.auth != null && (resource.data.authorId == request.auth.uid || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' || get(/databases/$(database)/documents/posts/$(postId)).data.authorId == request.auth.uid);
+      // 모든 로그인 사용자가 게시물을 읽을 수 있습니다.
+      allow get, list: ifisSignedIn();
+      
+      // 로그인한 사용자는 게시물을 작성할 수 있으며, 작성자 ID는 자신의 UID와 일치해야 합니다.
+      allow create: ifisSignedIn() && request.auth.uid == request.resource.data.authorId;
+      
+      // 게시물 작성자 또는 관리자만 게시물을 수정하거나 삭제할 수 있습니다.
+      allow update, delete: if (request.auth.uid == resource.data.authorId) || isAdmin();
+
+      // Comments Subcollection
+      match /comments/{commentId} {
+        // 모든 로그인 사용자가 댓글을 읽고 작성할 수 있습니다.
+        allow get, list, create: ifisSignedIn();
+        
+        // 댓글 작성자, 게시물 작성자, 또는 관리자만 댓글을 삭제할 수 있습니다.
+        allow delete: if (request.auth.uid == resource.data.authorId)
+                      || (request.auth.uid == get(/databases/$(database)/documents/posts/$(postId)).data.authorId)
+                      || isAdmin();
+      }
     }
 
-    // Announcements Collection
-    // - Authenticated users can read all announcements.
-    // - Only admins can create, update, or delete announcements.
+    // --- Announcements (Admin Only) ---
     match /announcements/{announcementId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      // 모든 로그인 사용자가 공지사항을 읽을 수 있습니다.
+      allow get, list: ifisSignedIn();
+      // 오직 관리자만 공지사항을 생성, 수정, 삭제할 수 있습니다.
+      allow create, update, delete: if isAdmin();
     }
 
-    // Advertisements Collection
-    // - Authenticated users can read all advertisements.
-    // - Only admins can create, update, or delete advertisements.
+    // --- Advertisements (Admin Only) ---
     match /advertisements/{adId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      // 모든 로그인 사용자가 광고를 볼 수 있습니다.
+      allow get, list: ifisSignedIn();
+      // 오직 관리자만 광고를 생성, 수정, 삭제할 수 있습니다.
+      allow create, update, delete: if isAdmin();
     }
-    
-    // User Activities (Bookmarks, etc.)
-    // A user can read/write any document in any subcollection under their own user activity path.
-    // This covers bookmarks and any future user-specific data.
-    match /user_activities/{userId}/{path=**} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+
+    // --- User-Specific Subcollections ---
+    // 사용자는 자신의 하위 컬렉션(북마크, 수익, 메모 등)에 대해서만 모든 권한을 가집니다.
+    match /users/{userId}/bookmarks/{docId} {
+      allow read, write: if request.auth.uid == userId;
     }
-    
-    // Schedule-related user data (Rate Profiles, Revenues, Notes)
-    // - A user can only access their own schedule data.
-    match /users/{userId}/rateProfiles/{profileId} {
-        allow read, write, delete: if request.auth != null && request.auth.uid == userId;
+    match /users/{userId}/rateProfiles/{docId} {
+      allow read, write: if request.auth.uid == userId;
     }
-    match /users/{userId}/revenues/{revenueId} {
-        allow read, write, delete: if request.auth != null && request.auth.uid == userId;
+    match /users/{userId}/revenues/{docId} {
+      allow read, write: if request.auth.uid == userId;
     }
-    match /users/{userId}/notes/{noteId} {
-        allow read, write, delete: if request.auth != null && request.auth.uid == userId;
+    match /users/{userId}/notes/{docId} {
+      allow read, write: if request.auth.uid == userId;
     }
   }
 }
