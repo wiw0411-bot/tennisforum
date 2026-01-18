@@ -5,90 +5,86 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // --- Helper Functions ---
-    
-    // 사용자가 로그인했는지 확인하는 함수
-    functionisSignedIn() {
+    function isSignedIn() {
       return request.auth != null;
     }
 
-    // 사용자가 관리자인지 확인하는 함수
-    // 사용자 문서가 존재하고, 해당 문서의 role 필드가 'admin'인지 확인합니다.
     function isAdmin() {
-      returnisSignedIn()
+      return isSignedIn()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
     // --- User Profiles ---
     match /users/{userId} {
-      // 모든 로그인 사용자가 다른 사용자의 프로필을 조회할 수 있습니다 (게시물 작성자 정보 등).
-      allow get: ifisSignedIn();
-      // 관리자만 전체 사용자 목록을 가져올 수 있습니다.
+      // [보안 강화] 오직 사용자 본인과 관리자만 전체 프로필 정보를 조회할 수 있습니다.
+      // 이를 통해 다른 사용자가 연락처 등 민감한 정보에 접근하는 것을 차단합니다.
+      allow get: if request.auth.uid == userId || isAdmin();
+      
+      // 관리자만 전체 사용자 목록을 조회할 수 있습니다.
       allow list: if isAdmin();
       
-      // 사용자는 자신의 사용자 문서만 생성할 수 있습니다.
-      // 생성 시 스스로 'admin' 역할을 부여하는 것을 방지합니다.
-      allow create: if request.auth.uid == userId 
-                    && request.resource.data.role == 'user';
+      // 사용자는 자신의 프로필만 생성할 수 있으며, 스스로 관리자 역할을 부여할 수 없습니다.
+      allow create: if request.auth.uid == userId && request.resource.data.role == 'user';
       
-      // 사용자는 자신의 정보만 업데이트할 수 있으며, 'role' 필드는 변경할 수 없습니다.
-      // 관리자는 모든 사용자의 정보를 업데이트할 수 있습니다.
-      allow update: if (request.auth.uid == userId && request.resource.data.role == resource.data.role)
-                    || isAdmin();
+      // 사용자는 자신의 프로필만 수정할 수 있으며, 역할(role)이나 가입일(createdAt) 등 중요 정보는 변경할 수 없습니다.
+      allow update: if (request.auth.uid == userId
+                      && request.resource.data.role == resource.data.role
+                      && request.resource.data.createdAt == resource.data.createdAt
+                    ) || isAdmin();
     }
 
     // --- Posts and Comments ---
     match /posts/{postId} {
-      // 모든 로그인 사용자가 게시물을 읽을 수 있습니다.
-      allow get, list: ifisSignedIn();
+      allow get, list: if isSignedIn();
       
-      // 로그인한 사용자는 게시물을 작성할 수 있으며, 작성자 ID는 자신의 UID와 일치해야 합니다.
-      allow create: ifisSignedIn() && request.auth.uid == request.resource.data.authorId;
+      // [보안 강화] 게시물 생성 시 데이터 유효성을 검사합니다. (작성자 ID 일치, 제목 존재, 조회수 0 등)
+      allow create: if isSignedIn()
+                    && request.resource.data.authorId == request.auth.uid
+                    && request.resource.data.title is string && request.resource.data.title.size() > 0
+                    && request.resource.data.views == 0
+                    && request.resource.data.createdAt == request.time;
       
-      // 게시물 작성자 또는 관리자만 게시물을 수정하거나 삭제할 수 있습니다.
-      allow update, delete: if (request.auth.uid == resource.data.authorId) || isAdmin();
+      // [기능 수정 및 보안 강화]
+      // 1. 게시물 작성자 또는 관리자는 게시물을 수정/삭제할 수 있습니다. (작성자, 작성일 등은 변경 불가)
+      // 2. 모든 로그인 사용자는 다른 내용은 변경하지 않고 '조회수'만 1씩 증가시킬 수 있습니다.
+      allow update: if (isAdmin())
+                    || (request.auth.uid == resource.data.authorId 
+                        && request.resource.data.authorId == resource.data.authorId
+                        && request.resource.data.createdAt == resource.data.createdAt)
+                    || (isSignedIn()
+                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views'])
+                        && request.resource.data.views == resource.data.views + 1);
+
+      allow delete: if request.auth.uid == resource.data.authorId || isAdmin();
 
       // Comments Subcollection
       match /comments/{commentId} {
-        // 모든 로그인 사용자가 댓글을 읽고 작성할 수 있습니다.
-        allow get, list, create: ifisSignedIn();
+        allow get, list, create: if isSignedIn();
         
-        // 댓글 작성자, 게시물 작성자, 또는 관리자만 댓글을 삭제할 수 있습니다.
+        // 댓글 작성자, 게시물 작성자, 또는 관리자만 댓글을 삭제할 수 있습니다. (기존 규칙 유지)
         allow delete: if (request.auth.uid == resource.data.authorId)
                       || (request.auth.uid == get(/databases/$(database)/documents/posts/$(postId)).data.authorId)
                       || isAdmin();
       }
     }
 
-    // --- Announcements (Admin Only) ---
+    // --- Announcements & Advertisements (Admin Only) ---
     match /announcements/{announcementId} {
-      // 모든 로그인 사용자가 공지사항을 읽을 수 있습니다.
-      allow get, list: ifisSignedIn();
-      // 오직 관리자만 공지사항을 생성, 수정, 삭제할 수 있습니다.
+      allow get, list: if isSignedIn();
       allow create, update, delete: if isAdmin();
     }
 
-    // --- Advertisements (Admin Only) ---
     match /advertisements/{adId} {
-      // 모든 로그인 사용자가 광고를 볼 수 있습니다.
-      allow get, list: ifisSignedIn();
-      // 오직 관리자만 광고를 생성, 수정, 삭제할 수 있습니다.
+      allow get, list: if isSignedIn();
       allow create, update, delete: if isAdmin();
     }
 
     // --- User-Specific Subcollections ---
-    // 사용자는 자신의 하위 컬렉션(북마크, 수익, 메모 등)에 대해서만 모든 권한을 가집니다.
-    match /users/{userId}/bookmarks/{docId} {
-      allow read, write: if request.auth.uid == userId;
-    }
-    match /users/{userId}/rateProfiles/{docId} {
-      allow read, write: if request.auth.uid == userId;
-    }
-    match /users/{userId}/revenues/{docId} {
-      allow read, write: if request.auth.uid == userId;
-    }
-    match /users/{userId}/notes/{docId} {
-      allow read, write: if request.auth.uid == userId;
+    // [구조 개선] 사용자는 자신의 하위 컬렉션(북마크, 수익, 메모 등)에 대해서만 접근 권한을 가집니다.
+    // 반복되는 규칙을 하나로 통합하여 관리 효율성을 높입니다.
+    match /users/{userId}/{collection}/{docId} {
+        allow read, write: if request.auth.uid == userId;
     }
   }
 }

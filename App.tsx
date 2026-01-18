@@ -30,7 +30,7 @@ import { collection, getDocs, Timestamp, addDoc, serverTimestamp, doc, deleteDoc
 import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
 
 
-const ADMIN_EMAIL = 'admin@tennisforum.ai.kr';
+const ADMIN_EMAIL = 'wnxogud12@naver.com';
 
 const handleFirestoreError = (error: any, context: string) => {
     console.error(`Firestore error (${context}):`, error);

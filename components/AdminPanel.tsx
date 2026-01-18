@@ -1,5 +1,6 @@
 
 
+
 import React, { useState, useMemo, useRef } from 'react';
 import { Post, Announcement, User, Advertisement } from '../types';
 import PowerIcon from './icons/PowerIcon';
@@ -8,6 +9,8 @@ import UserActivityModal from './UserActivityModal';
 import TrashIcon from './icons/TrashIcon';
 import UserCircleIcon from './icons/UserCircleIcon';
 import PostDetail from './PostDetail';
+import ArrowLeftIcon from './icons/ArrowLeftIcon';
+import XIcon from './icons/XIcon';
 
 interface AdminPanelProps {
   currentUser: User | null;
@@ -207,10 +210,15 @@ const PostManagement: React.FC<{ posts: Post[]; onDeletePost: (postId: string) =
     );
 }
 
-const AnnouncementManagement: React.FC<{ announcements: Announcement[], onCreateAnnouncement: (announcement: Omit<Announcement, 'id' | 'createdAt'>) => void, onDeleteAnnouncement: (announcementId: string) => void }> = ({ announcements, onCreateAnnouncement, onDeleteAnnouncement }) => {
+const AnnouncementManagement: React.FC<{ 
+    announcements: Announcement[], 
+    onCreateAnnouncement: (announcement: Omit<Announcement, 'id' | 'createdAt'>) => void, 
+    onDeleteAnnouncement: (announcementId: string) => void,
+    onSelectAnnouncement: (announcement: Announcement) => void 
+}> = ({ announcements, onCreateAnnouncement, onDeleteAnnouncement, onSelectAnnouncement }) => {
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
-    const [imageUrl, setImageUrl] = useState('');
+    const [imageUrl, setImageUrl] = useState<string | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -226,7 +234,7 @@ const AnnouncementManagement: React.FC<{ announcements: Announcement[], onCreate
         onCreateAnnouncement(announcementData);
         setTitle('');
         setContent('');
-        setImageUrl('');
+        setImageUrl(null);
     };
 
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -258,7 +266,18 @@ const AnnouncementManagement: React.FC<{ announcements: Announcement[], onCreate
                             이미지 첨부
                         </button>
                         <input type="file" ref={fileInputRef} onChange={handleImageUpload} accept="image/*" className="hidden" />
-                        {imageUrl && <span className="text-xs text-gray-500">이미지가 첨부되었습니다.</span>}
+                        {imageUrl && (
+                            <div className="relative w-20 h-20">
+                                <img src={imageUrl} alt="Preview" className="w-full h-full object-cover rounded-md" />
+                                <button
+                                    type="button"
+                                    onClick={() => setImageUrl(null)}
+                                    className="absolute -top-1 -right-1 bg-black/60 text-white rounded-full p-1 shadow-md hover:bg-black"
+                                >
+                                    <XIcon />
+                                </button>
+                            </div>
+                        )}
                     </div>
 
                     <button type="submit" className="w-full bg-[#ff5710] text-white font-bold py-2 rounded-md hover:bg-[#e64e0e]">공지 등록</button>
@@ -270,12 +289,12 @@ const AnnouncementManagement: React.FC<{ announcements: Announcement[], onCreate
                 <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
                     <ul className="divide-y divide-gray-200">
                         {sortedAnnouncements.map(ann => (
-                            <li key={ann.id} className="p-4 flex justify-between items-center hover:bg-gray-50">
-                                <div>
+                             <li key={ann.id} className="flex justify-between items-center">
+                                <div className="flex-grow cursor-pointer p-4 hover:bg-gray-50" onClick={() => onSelectAnnouncement(ann)}>
                                     <p className="font-semibold text-gray-800">{ann.title}</p>
                                     <p className="text-xs text-gray-500 mt-1">{new Date(ann.createdAt).toLocaleDateString()}</p>
                                 </div>
-                                <button onClick={() => onDeleteAnnouncement(ann.id)} className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50">
+                                <button onClick={() => onDeleteAnnouncement(ann.id)} className="text-red-500 hover:text-red-700 p-4 flex-shrink-0 hover:bg-red-50">
                                     <TrashIcon />
                                 </button>
                             </li>
@@ -365,6 +384,34 @@ const AdManagement: React.FC<{
   )
 }
 
+const AnnouncementDetailView: React.FC<{ announcement: Announcement; onBack: () => void; onDelete: (id: string) => void; }> = ({ announcement, onBack, onDelete }) => (
+  <div className="h-full flex flex-col">
+    <header className="bg-white sticky top-0 z-10 p-4 border-b flex items-center justify-between h-16 flex-shrink-0">
+       <button
+          onClick={onBack}
+          className="p-2 -ml-2 text-gray-500 hover:text-gray-800"
+          aria-label="뒤로가기"
+      >
+          <ArrowLeftIcon />
+      </button>
+      <h1 className="text-lg font-bold text-gray-900">공지사항 상세</h1>
+      <button onClick={() => onDelete(announcement.id)} className="text-red-500 hover:text-red-700 p-2 -mr-2">
+          <TrashIcon />
+      </button>
+    </header>
+    <main className="flex-grow overflow-y-auto hide-scrollbar p-4 bg-gray-50">
+      <div className="bg-white p-6 rounded-lg shadow-md border">
+          <h2 className="text-xl font-bold text-gray-800">{announcement.title}</h2>
+          <p className="text-xs text-gray-500 my-2">{new Date(announcement.createdAt).toLocaleString()}</p>
+          {announcement.imageUrl && (
+              <img src={announcement.imageUrl} alt={announcement.title} className="w-full h-auto object-cover rounded-lg my-4" />
+          )}
+          <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{announcement.content}</p>
+      </div>
+    </main>
+  </div>
+);
+
 
 const AdminPanel: React.FC<AdminPanelProps> = ({ 
     currentUser, users, posts, announcements, advertisements, onLogout, onDeletePost, 
@@ -373,6 +420,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
 }) => {
   const [activeTab, setActiveTab] = useState<'stats' | 'users' | 'posts' | 'announcements' | 'ads'>('stats');
   const [viewingPost, setViewingPost] = useState<Post | null>(null);
+  const [viewingAnnouncement, setViewingAnnouncement] = useState<Announcement | null>(null);
 
   const handleSelectPost = (post: Post) => setViewingPost(post);
   const handleBackFromPost = () => setViewingPost(null);
@@ -382,6 +430,13 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     setViewingPost(null);
   };
   
+  const handleSelectAnnouncement = (ann: Announcement) => setViewingAnnouncement(ann);
+  const handleBackFromAnnouncement = () => setViewingAnnouncement(null);
+  const handleDeleteAnnouncementInDetail = (annId: string) => {
+    onDeleteAnnouncement(annId);
+    setViewingAnnouncement(null);
+  };
+
   if (viewingPost) {
     return (
       <div className="h-full flex flex-col bg-gray-100">
@@ -390,6 +445,18 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
             onBack={handleBackFromPost}
             currentUser={currentUser}
             onDeletePost={handleDeletePostInDetail}
+        />
+      </div>
+    );
+  }
+
+  if (viewingAnnouncement) {
+    return (
+      <div className="h-full flex flex-col bg-gray-100">
+        <AnnouncementDetailView 
+            announcement={viewingAnnouncement}
+            onBack={handleBackFromAnnouncement}
+            onDelete={handleDeleteAnnouncementInDetail}
         />
       </div>
     );
@@ -431,7 +498,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
         {activeTab === 'stats' && <Statistics users={users} posts={posts} />}
         {activeTab === 'users' && <UserManagement users={users} posts={posts} />}
         {activeTab === 'posts' && <PostManagement posts={posts} onDeletePost={onDeletePost} onSelectPost={handleSelectPost} />}
-        {activeTab === 'announcements' && <AnnouncementManagement announcements={announcements} onCreateAnnouncement={onCreateAnnouncement} onDeleteAnnouncement={onDeleteAnnouncement} />}
+        {activeTab === 'announcements' && <AnnouncementManagement announcements={announcements} onCreateAnnouncement={onCreateAnnouncement} onDeleteAnnouncement={onDeleteAnnouncement} onSelectAnnouncement={handleSelectAnnouncement} />}
         {activeTab === 'ads' && <AdManagement advertisements={advertisements} onCreateAdvertisement={onCreateAdvertisement} onUpdateAdvertisement={onUpdateAdvertisement} onDeleteAdvertisement={onDeleteAdvertisement} />}
       </main>
     </div>
