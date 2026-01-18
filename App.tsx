@@ -168,12 +168,20 @@ const App: React.FC = () => {
 
             const userRef = doc(db, 'users', userAuth.uid);
             const snapshot = await getDoc(userRef);
+            const isKnownAdmin = userAuth.email === ADMIN_EMAIL;
 
             if (snapshot.exists()) {
-              const userForState = { id: snapshot.id, ...snapshot.data() } as User;
-              if (userAuth.email === ADMIN_EMAIL) {
-                userForState.role = 'admin';
+              const userData = snapshot.data();
+              // Ensure the admin role is correctly set in Firestore for existing users
+              if (isKnownAdmin && userData.role !== 'admin') {
+                try {
+                    await updateDoc(userRef, { role: 'admin' });
+                    userData.role = 'admin'; // Update local data to reflect change
+                } catch (error) {
+                    handleFirestoreError(error, "관리자 역할 업데이트");
+                }
               }
+              const userForState = { id: snapshot.id, ...userData } as User;
               setCurrentUser(userForState);
               setIsAuthenticated(true);
             } else {
@@ -183,18 +191,16 @@ const App: React.FC = () => {
 
               if (isSocialLogin) {
                 const { displayName, email, photoURL } = userAuth;
+                // Set role to 'admin' on creation if email matches
                 const newUser: Omit<User, 'id'> = {
                   name: displayName || email?.split('@')[0] || '새 사용자',
-                  role: 'user',
+                  role: isKnownAdmin ? 'admin' : 'user',
                   createdAt: new Date().toISOString(),
                   ...(photoURL && { avatarUrl: photoURL }),
                 };
                 try {
                   await setDoc(userRef, newUser);
                   const userForState = { id: userAuth.uid, ...newUser } as User;
-                   if (userAuth.email === ADMIN_EMAIL) {
-                    userForState.role = 'admin';
-                  }
                   setCurrentUser(userForState);
                   setIsAuthenticated(true);
                 } catch (error) {
@@ -227,7 +233,7 @@ const App: React.FC = () => {
 
         setIsDataLoading(true);
         try {
-            // Step 1: Seed data ONLY if admin.
+            // Step 1: Seed data ONLY if admin. This will now work because the user's role in Firestore is correct.
             if (currentUser.role === 'admin') {
                 await seedInitialData(currentUser);
             }
