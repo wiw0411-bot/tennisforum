@@ -167,48 +167,48 @@ const App: React.FC = () => {
             setVerificationEmail(null);
 
             const userRef = doc(db, 'users', userAuth.uid);
-            const snapshot = await getDoc(userRef);
             const isKnownAdmin = userAuth.email === ADMIN_EMAIL;
 
-            if (snapshot.exists()) {
-              const userData = snapshot.data();
-              // Ensure the admin role is correctly set in Firestore for existing users
-              if (isKnownAdmin && userData.role !== 'admin') {
-                try {
-                    await updateDoc(userRef, { role: 'admin' });
-                    userData.role = 'admin'; // Update local data to reflect change
-                } catch (error) {
-                    handleFirestoreError(error, "관리자 역할 업데이트");
-                }
-              }
-              const userForState = { id: snapshot.id, ...userData } as User;
-              setCurrentUser(userForState);
-              setIsAuthenticated(true);
-            } else {
-              const isSocialLogin = userAuth.providerData.some(
-                (provider) => provider.providerId !== 'password'
-              );
+            try {
+                let snapshot = await getDoc(userRef);
+                let userData;
 
-              if (isSocialLogin) {
-                const { displayName, email, photoURL } = userAuth;
-                // Set role to 'admin' on creation if email matches
-                const newUser: Omit<User, 'id'> = {
-                  name: displayName || email?.split('@')[0] || '새 사용자',
-                  role: isKnownAdmin ? 'admin' : 'user',
-                  createdAt: new Date().toISOString(),
-                  ...(photoURL && { avatarUrl: photoURL }),
-                };
-                try {
-                  await setDoc(userRef, newUser);
-                  const userForState = { id: userAuth.uid, ...newUser } as User;
-                  setCurrentUser(userForState);
-                  setIsAuthenticated(true);
-                } catch (error) {
-                   handleFirestoreError(error, "소셜 로그인 사용자 프로필 생성");
-                   setCurrentUser(null);
-                   setIsAuthenticated(false);
+                if (snapshot.exists()) {
+                    userData = snapshot.data();
+                    // If an existing user logs in with the admin email, but their role is not 'admin' yet, update it.
+                    if (isKnownAdmin && userData.role !== 'admin') {
+                        await updateDoc(userRef, { role: 'admin' });
+                        // Re-fetch the snapshot to ensure we have the most up-to-date data before setting state.
+                        snapshot = await getDoc(userRef);
+                        userData = snapshot.data();
+                    }
+                } else {
+                    // This block handles new users, especially from social logins.
+                    const isSocialLogin = userAuth.providerData.some(p => p.providerId !== 'password');
+                    if (isSocialLogin) {
+                        const { displayName, email, photoURL } = userAuth;
+                        const newUser: Omit<User, 'id'> = {
+                            name: displayName || email?.split('@')[0] || '새 사용자',
+                            role: isKnownAdmin ? 'admin' : 'user',
+                            createdAt: new Date().toISOString(),
+                            ...(photoURL && { avatarUrl: photoURL }),
+                        };
+                        await setDoc(userRef, newUser);
+                        userData = newUser;
+                    }
                 }
-              }
+
+                if (userData) {
+                    const userForState = { id: userAuth.uid, ...userData } as User;
+                    setCurrentUser(userForState);
+                    setIsAuthenticated(true);
+                } else {
+                    // If for some reason userData is still undefined (e.g., non-social new user), sign out.
+                    await signOut(auth);
+                }
+            } catch (error) {
+                handleFirestoreError(error, "사용자 정보 처리");
+                await signOut(auth);
             }
         }
       } else {
