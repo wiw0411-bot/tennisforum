@@ -10,13 +10,7 @@ import ClockIcon from './icons/ClockIcon';
 import WalletIcon from './icons/WalletIcon';
 import CommentIcon from './icons/CommentIcon';
 import { db } from '../firebase';
-// FIX: The project seems to be using Firebase v8 SDK.
-// Removed v9 modular imports and will use v8 namespaced API.
-import firebase from 'firebase/app';
-import 'firebase/firestore';
-const { Timestamp } = firebase.firestore;
-const serverTimestamp = firebase.firestore.FieldValue.serverTimestamp;
-
+import { collection, query, orderBy, getDocs, addDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
 
 interface PostDetailProps {
   post: Post;
@@ -37,10 +31,9 @@ const PostDetail: React.FC<PostDetailProps> = ({ post, onBack, currentUser, onDe
   const fetchComments = useCallback(async () => {
     try {
         setIsLoadingComments(true);
-        // FIX: Use v8 collection/query/get syntax
-        const commentsRef = db.collection(`posts/${post.id}/comments`);
-        const q = commentsRef.orderBy('createdAt', 'asc');
-        const querySnapshot = await q.get();
+        const commentsRef = collection(db, `posts/${post.id}/comments`);
+        const q = query(commentsRef, orderBy('createdAt', 'asc'));
+        const querySnapshot = await getDocs(q);
         const fetchedComments = querySnapshot.docs.map(doc => {
             const data = doc.data();
             return {
@@ -72,14 +65,12 @@ const PostDetail: React.FC<PostDetailProps> = ({ post, onBack, currentUser, onDe
       authorId: currentUser.id,
       authorAvatar: currentUser.avatarUrl,
       content: newComment,
-      // FIX: Use v8 serverTimestamp
       createdAt: serverTimestamp(),
     };
     
     try {
-        // FIX: Use v8 collection/add syntax
-        const commentsRef = db.collection(`posts/${post.id}/comments`);
-        await commentsRef.add(commentData);
+        const commentsRef = collection(db, `posts/${post.id}/comments`);
+        await addDoc(commentsRef, commentData);
         setNewComment('');
         fetchComments(); // Re-fetch comments to show the new one
     } catch (error: any) {

@@ -4,8 +4,7 @@ import ArrowLeftIcon from './icons/ArrowLeftIcon';
 import UserCircleIcon from './icons/UserCircleIcon';
 import CameraIcon from './icons/CameraIcon';
 import { storage } from '../firebase';
-// FIX: The project seems to be using Firebase v8 SDK.
-// Removed v9 modular imports for storage. The `storage` instance from firebase.ts will be used.
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 interface ProfileEditScreenProps {
   currentUser: User;
@@ -24,10 +23,9 @@ const ProfileEditScreen: React.FC<ProfileEditScreenProps> = ({ currentUser, onBa
     if (file) {
       setIsUploading(true);
       try {
-        // FIX: Use v8 storage syntax
-        const storageRef = storage.ref(`avatars/${currentUser.id}/${file.name}`);
-        await storageRef.put(file);
-        const downloadURL = await storageRef.getDownloadURL();
+        const storageRef = ref(storage, `avatars/${currentUser.id}/${file.name}`);
+        await uploadBytes(storageRef, file);
+        const downloadURL = await getDownloadURL(storageRef);
         setAvatar(downloadURL);
       } catch (error) {
         console.error("Avatar upload failed:", error);

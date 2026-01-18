@@ -8,8 +8,7 @@ import PaperClipIcon from './icons/PaperClipIcon';
 import XIcon from './icons/XIcon';
 import ArrowLeftIcon from './icons/ArrowLeftIcon';
 import { storage } from '../firebase';
-// FIX: The project seems to be using Firebase v8 SDK.
-// Removed v9 modular imports for storage. The `storage` instance from firebase.ts will be used.
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 type NewPostData = Omit<Post, 'id' | 'createdAt' | 'views'>;
 
@@ -192,10 +191,9 @@ const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel, activeCategory,
     if (file) {
       setIsRepImageUploading(true);
       try {
-        // FIX: Use v8 storage syntax
-        const storageRef = storage.ref(`posts/rep/${Date.now()}_${file.name}`);
-        await storageRef.put(file);
-        const downloadURL = await storageRef.getDownloadURL();
+        const storageRef = ref(storage, `posts/rep/${Date.now()}_${file.name}`);
+        await uploadBytes(storageRef, file);
+        const downloadURL = await getDownloadURL(storageRef);
         setImageUrl(downloadURL);
       } catch (error) {
         console.error("Representative image upload failed:", error);
@@ -211,10 +209,9 @@ const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel, activeCategory,
       setIsContentImageUploading(true);
       try {
         const uploadPromises = Array.from(e.target.files).map(async (file) => {
-          // FIX: Use v8 storage syntax
-          const storageRef = storage.ref(`posts/content/${Date.now()}_${file.name}`);
-          await storageRef.put(file);
-          return storageRef.getDownloadURL();
+          const storageRef = ref(storage, `posts/content/${Date.now()}_${file.name}`);
+          await uploadBytes(storageRef, file);
+          return getDownloadURL(storageRef);
         });
         const urls = await Promise.all(uploadPromises);
         setContentImages(prev => [...prev, ...urls]);

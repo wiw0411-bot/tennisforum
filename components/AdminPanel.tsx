@@ -1,12 +1,3 @@
-
-
-
-
-
-
-
-
-
 import React, { useState, useMemo, useRef } from 'react';
 import { Post, Announcement, User, Advertisement } from '../types';
 import PowerIcon from './icons/PowerIcon';
@@ -18,8 +9,7 @@ import PostDetail from './PostDetail';
 import ArrowLeftIcon from './icons/ArrowLeftIcon';
 import XIcon from './icons/XIcon';
 import { storage } from '../firebase';
-// FIX: The project seems to be using Firebase v8 SDK.
-// Removed v9 modular imports for storage. The `storage` instance from firebase.ts will be used.
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 interface AdminPanelProps {
   currentUser: User | null;
@@ -227,6 +217,7 @@ const AnnouncementManagement: React.FC<{
 }> = ({ announcements, onCreateAnnouncement, onDeleteAnnouncement, onSelectAnnouncement }) => {
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
+    const contentEditableRef = useRef<HTMLDivElement>(null);
     const [imageUrl, setImageUrl] = useState<string | null>(null);
     const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
@@ -250,6 +241,10 @@ const AnnouncementManagement: React.FC<{
     
     const applyStyle = (command: string, value: string | null = null) => {
       document.execCommand(command, false, value);
+      if (contentEditableRef.current) {
+        setContent(contentEditableRef.current.innerHTML);
+        contentEditableRef.current.focus();
+      }
     };
 
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -257,10 +252,9 @@ const AnnouncementManagement: React.FC<{
         if (file) {
             setIsUploading(true);
             try {
-                // FIX: Use v8 storage syntax
-                const storageRef = storage.ref(`announcements/${Date.now()}_${file.name}`);
-                await storageRef.put(file);
-                const downloadURL = await storageRef.getDownloadURL();
+                const storageRef = ref(storage, `announcements/${Date.now()}_${file.name}`);
+                await uploadBytes(storageRef, file);
+                const downloadURL = await getDownloadURL(storageRef);
                 setImageUrl(downloadURL);
             } catch (error) {
                 console.error("Image upload failed:", error);
@@ -284,7 +278,7 @@ const AnnouncementManagement: React.FC<{
                     
                     <div>
                         <div className="flex items-center space-x-2 p-2 bg-gray-100 rounded-t-md border-b border-gray-300">
-                            <button type="button" onClick={() => applyStyle('bold')} className="font-bold w-8 h-8 flex items-center justify-center bg-white rounded shadow-sm text-sm">B</button>
+                            <button type="button" onClick={() => applyStyle('bold')} className="font-bold w-8 h-8 flex items-center justify-center bg-white rounded shadow-sm text-sm text-gray-800">B</button>
                             <div className="relative w-8 h-8 bg-white rounded shadow-sm">
                                 <input 
                                   type="color" 
@@ -296,6 +290,7 @@ const AnnouncementManagement: React.FC<{
                             </div>
                         </div>
                         <div
+                            ref={contentEditableRef}
                             onInput={e => setContent(e.currentTarget.innerHTML)}
                             contentEditable
                             dangerouslySetInnerHTML={{ __html: content }}

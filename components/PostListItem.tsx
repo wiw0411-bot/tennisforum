@@ -47,7 +47,7 @@ const PostListItem: React.FC<PostListItemProps> = ({ post, onSelectPost, onToggl
     } else if (post.hasLessonCareer === false) {
        careerSummaryParts.push(`레슨경력 없음`);
     }
-    if (post.field) careerSummaryParts.push(post.field);
+    if (post.field) careerSummaryParts.push(`출신분야: ${post.field}`);
     const careerSummary = careerSummaryParts.join(' | ');
 
     const detailsSummaryParts = [];
