@@ -1,54 +1,3 @@
-
-// 중요: 드디어 원인을 찾았습니다! 아래의 '최종 FIREBASE STORAGE 규칙'을 적용해주세요.
-//
-// 원인:
-// 기존 Storage 규칙의 'isAdmin' 함수가 관리자 계정을 제대로 인식하지 못했습니다.
-// 임시로 모든 사용자에게 권한을 열어주니 업로드가 성공한 것입니다.
-//
-// 해결 방법:
-// 아래의 '최종 FIREBASE STORAGE 규칙'은 보안을 다시 강화하면서도
-// 관리자 이메일('wnxogud12@naver.com')을 직접 확인하여 안정적으로 작동합니다.
-//
-// 1. Firebase 콘솔의 Storage > 규칙 탭으로 이동하세요.
-// 2. 편집기의 모든 내용을 지우고, 아래 '최종 FIREBASE STORAGE 규칙' 블록 전체를 복사하여 붙여넣으세요.
-// 3. '게시(Publish)' 버튼을 클릭하여 저장하면 모든 문제가 해결됩니다.
-//
-// --- START: 최종 FIREBASE STORAGE 규칙 (이 부분을 복사하세요) ---
-rules_version = '2';
-
-service firebase.storage {
-  match /b/{bucket}/o {
-    
-    // 관리자 이메일을 직접 확인하는 함수 (더 안정적임)
-    function isHardcodedAdmin() {
-      return request.auth.token.email == 'wnxogud12@naver.com';
-    }
-
-    // 모든 파일에 대해 공개적인 읽기 허용
-    match /{allPaths=**} {
-      allow read;
-    }
-
-    // 인증된 사용자는 자신의 아바타 폴더에만 쓰기 가능
-    match /avatars/{userId}/{allPaths=**} {
-      allow write: if request.auth != null && request.auth.uid == userId;
-    }
-    
-    // 인증된 사용자는 게시물(posts) 폴더에 쓰기 가능
-    match /posts/{allPaths=**} {
-      allow write: if request.auth != null;
-    }
-    
-    // 관리자만 공지사항(announcements) 폴더에 쓰기 가능
-    match /announcements/{allPaths=**} {
-      allow write: if request.auth != null && isHardcodedAdmin();
-    }
-  }
-}
-// --- END: 최종 FIREBASE STORAGE 규칙 ---
-
-
-// --- START: FIRESTORE 규칙 (이 파일은 수정할 필요 없습니다) ---
 rules_version = '2';
 
 service cloud.firestore {
@@ -63,6 +12,15 @@ service cloud.firestore {
       return isSignedIn()
         && exists(/databases/$(database)/documents/users/$(request.auth.uid))
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // --- Nickname Uniqueness Check ---
+    match /nicknames/{nickname} {
+      // Anyone can check for nickname existence during signup.
+      allow read: if true;
+      // Only an authenticated user can create a nickname document,
+      // and it must be associated with their own UID.
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
     }
 
     // --- User Profiles ---

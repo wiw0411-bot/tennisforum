@@ -1,6 +1,7 @@
-import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getAnalytics } from "firebase/analytics";
+// FIX: Use namespace imports for firebase modules to resolve export errors.
+import * as firebaseApp from "firebase/app";
+import * as firebaseAuth from "firebase/auth";
+import * as firebaseAnalytics from "firebase/analytics";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
@@ -17,10 +18,10 @@ const firebaseConfig = {
 
 
 // Initialize Firebase
-const app = initializeApp(firebaseConfig);
+const app = firebaseApp.initializeApp(firebaseConfig);
 
 // Export the necessary Firebase services for your app to use
 export const db = getFirestore(app);
-export const auth = getAuth(app);
+export const auth = firebaseAuth.getAuth(app);
 export const storage = getStorage(app);
-export const analytics = getAnalytics(app);
+export const analytics = firebaseAnalytics.getAnalytics(app);

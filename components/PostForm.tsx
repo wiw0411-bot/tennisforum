@@ -187,8 +187,9 @@ const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel, activeCategory,
 
 
   const handleRepImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
+    // FIX: Refactored to use a more robust check for files to help with TypeScript type inference.
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
       setIsRepImageUploading(true);
       try {
         const storageRef = ref(storage, `posts/rep/${Date.now()}_${file.name}`);
@@ -208,7 +209,7 @@ const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel, activeCategory,
     if (e.target.files && e.target.files.length > 0) {
       setIsContentImageUploading(true);
       try {
-        const uploadPromises = Array.from(e.target.files).map(async (file) => {
+        const uploadPromises = Array.from(e.target.files).map(async (file: File) => {
           const storageRef = ref(storage, `posts/content/${Date.now()}_${file.name}`);
           await uploadBytes(storageRef, file);
           return getDownloadURL(storageRef);

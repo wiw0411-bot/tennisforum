@@ -1,13 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { auth, db } from '../firebase';
-import { 
-  fetchSignInMethodsForEmail, 
-  createUserWithEmailAndPassword, 
-  signInWithEmailAndPassword, 
-  sendEmailVerification,
-  type User as FirebaseUser 
-} from 'firebase/auth';
-import { collection, query, where, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
+// FIX: Use namespace import for firebase/auth to resolve export errors.
+import * as firebaseAuth from 'firebase/auth';
+import { doc, getDoc, setDoc, writeBatch } from 'firebase/firestore';
 import { User } from '../types';
 
 import { loginBackgroundImage } from '../assets/imageAssets';
@@ -109,7 +104,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onShowPrivacyPolicy, onShowTe
     setIsCheckingEmail(true);
     setEmailCheckMessage('');
     try {
-        const methods = await fetchSignInMethodsForEmail(auth, email);
+        // FIX: Use namespaced firebase auth function.
+        const methods = await firebaseAuth.fetchSignInMethodsForEmail(auth, email);
         if (methods.length > 0) {
             setEmailCheckMessage('이미 사용 중인 이메일입니다.');
             setIsEmailAvailable(false);
@@ -138,10 +134,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onShowPrivacyPolicy, onShowTe
     setIsCheckingNickname(true);
     setNicknameCheckMessage('');
     try {
-        const usersRef = collection(db, 'users');
-        const q = query(usersRef, where("name", "==", trimmedNickname));
-        const querySnapshot = await getDocs(q);
-        if (!querySnapshot.empty) {
+        const nicknameRef = doc(db, 'nicknames', trimmedNickname);
+        const docSnap = await getDoc(nicknameRef);
+
+        if (docSnap.exists()) {
             setNicknameCheckMessage('이미 사용 중인 닉네임입니다.');
             setIsNicknameAvailable(false);
         } else {
@@ -157,31 +153,6 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onShowPrivacyPolicy, onShowTe
         setIsCheckingNickname(false);
     }
   };
-
-
-  const createUserProfileDocument = async (userAuth: FirebaseUser, additionalData: { name: string; phone: string }) => {
-      const userRef = doc(db, 'users', userAuth.uid);
-      const snapshot = await getDoc(userRef);
-
-      if (!snapshot.exists()) {
-          const { photoURL } = userAuth;
-          const createdAt = new Date().toISOString();
-          const newUser: Omit<User, 'id'> = {
-              name: additionalData.name,
-              phone: additionalData.phone,
-              role: 'user',
-              createdAt,
-              ...(photoURL && { avatarUrl: photoURL }),
-          };
-          try {
-              await setDoc(userRef, newUser);
-          } catch(err) {
-              console.error("Error creating user document", err);
-              throw err;
-          }
-      }
-      return userRef;
-  };
   
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -189,7 +160,8 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onShowPrivacyPolicy, onShowTe
 
     if (isLoginView) {
       try {
-        await signInWithEmailAndPassword(auth, email, password);
+        // FIX: Use namespaced firebase auth function.
+        await firebaseAuth.signInWithEmailAndPassword(auth, email, password);
       } catch (err: any) {
         if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
             setApiError('이메일 또는 비밀번호가 잘못되었습니다.');
@@ -204,12 +176,35 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onShowPrivacyPolicy, onShowTe
       }
       try {
         auth.languageCode = 'ko'; // Set language before sending email
-        const { user } = await createUserWithEmailAndPassword(auth, email, password);
+        // FIX: Use namespaced firebase auth function.
+        const { user } = await firebaseAuth.createUserWithEmailAndPassword(auth, email, password);
         if (!user) {
             throw new Error("User creation failed.");
         }
-        await createUserProfileDocument(user, { name: nickname, phone });
-        await sendEmailVerification(user);
+        
+        // Create user profile and nickname document atomically
+        const { photoURL } = user;
+        const createdAt = new Date().toISOString();
+        const newUser: Omit<User, 'id'> = {
+            name: nickname,
+            phone: phone,
+            role: 'user',
+            createdAt,
+            ...(photoURL && { avatarUrl: photoURL }),
+        };
+
+        const batch = writeBatch(db);
+        
+        const userRef = doc(db, 'users', user.uid);
+        batch.set(userRef, newUser);
+        
+        const nicknameRef = doc(db, 'nicknames', nickname);
+        batch.set(nicknameRef, { userId: user.uid });
+        
+        await batch.commit();
+
+        // FIX: Use namespaced firebase auth function.
+        await firebaseAuth.sendEmailVerification(user);
         // After this, the onAuthStateChanged listener in App.tsx will detect the new unverified user.
       } catch (err: any) {
          if (err.code === 'auth/email-already-in-use') {
@@ -300,7 +295,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onShowPrivacyPolicy, onShowTe
           </div>
           <div>
              <div className="flex items-center space-x-2">
-                <input type="text" value={nickname} onChange={handleNicknameChange} placeholder="닉네임 (한글 5자 / 영문 10자)" required className="flex-grow w-full h-12 px-4 rounded-xl bg-gray-100 border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff5710] text-gray-900 placeholder-gray-500" />
+                <input type="text" value={nickname} onChange={handleNicknameChange} placeholder="닉네임 (한글 5자, 영문 10자 이내)" required className="flex-grow w-full h-12 px-4 rounded-xl bg-gray-100 border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff5710] text-gray-900 placeholder-gray-500" />
                 <button 
                     type="button" 
                     onClick={handleNicknameCheck}

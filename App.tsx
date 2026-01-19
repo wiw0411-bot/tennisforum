@@ -1,4 +1,5 @@
 
+
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Post, Category, Comment, Announcement, User, Notification, NotificationType, Advertisement } from './types';
 import { CATEGORIES } from './constants';
@@ -26,7 +27,8 @@ import AdBanner from './components/AdBanner';
 import EmailVerificationScreen from './components/EmailVerificationScreen';
 import { db, auth } from './firebase'; 
 import { collection, getDocs, doc, getDoc, setDoc, updateDoc, deleteDoc, writeBatch, serverTimestamp, Timestamp, query, orderBy, increment, addDoc } from 'firebase/firestore';
-import { onAuthStateChanged, signOut, type User as FirebaseUser } from 'firebase/auth';
+// FIX: Use namespace import for firebase/auth to resolve export errors.
+import * as firebaseAuth from 'firebase/auth';
 
 const ADMIN_EMAIL = 'wnxogud12@naver.com';
 
@@ -144,7 +146,8 @@ const App: React.FC = () => {
   }
   
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (userAuth) => {
+    // FIX: Use namespaced firebase auth function.
+    const unsubscribe = firebaseAuth.onAuthStateChanged(auth, async (userAuth) => {
       if (userAuth) {
         if (!userAuth.emailVerified && userAuth.email !== ADMIN_EMAIL) {
             setVerificationEmail(userAuth.email);
@@ -331,7 +334,8 @@ const App: React.FC = () => {
   const bookmarkedPosts = useMemo(() => postsWithBookmarks.filter(p => p.isBookmarked), [postsWithBookmarks]);
 
   const handleLogout = useCallback(async () => {
-    await signOut(auth);
+    // FIX: Use namespaced firebase auth function.
+    await firebaseAuth.signOut(auth);
     setActiveTab('home');
     setHomeView('dashboard');
     setCurrentScreen('list');
@@ -773,7 +777,7 @@ const App: React.FC = () => {
   }
   
   if (pendingVerification) {
-    return <EmailVerificationScreen email={verificationEmail} onBackToLogin={() => signOut(auth)} />;
+    return <EmailVerificationScreen email={verificationEmail} onBackToLogin={() => firebaseAuth.signOut(auth)} />;
   }
 
   if (!isAuthenticated) {

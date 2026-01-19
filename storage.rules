@@ -1,0 +1,31 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // 관리자 이메일을 직접 확인하는 함수 (더 안정적임)
+    function isHardcodedAdmin() {
+      return request.auth.token.email == 'wnxogud12@naver.com';
+    }
+
+    // 모든 파일에 대해 공개적인 읽기 허용
+    match /{allPaths=**} {
+      allow read;
+    }
+
+    // 인증된 사용자는 자신의 아바타 폴더에만 쓰기 가능
+    match /avatars/{userId}/{allPaths=**} {
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // 인증된 사용자는 게시물(posts) 폴더에 쓰기 가능
+    match /posts/{allPaths=**} {
+      allow write: if request.auth != null;
+    }
+    
+    // 관리자만 공지사항(announcements) 폴더에 쓰기 가능
+    match /announcements/{allPaths=**} {
+      allow write: if request.auth != null && isHardcodedAdmin();
+    }
+  }
+}
