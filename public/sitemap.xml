@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <!-- 기본 페이지: 홈페이지 -->
+  <url>
+    <loc>https://tennisforum.ai.kr/</loc>
+    <lastmod>2024-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+  </url>
+  
+  <!-- 카테고리 페이지 -->
+  <url>
+    <loc>https://tennisforum.ai.kr/board/JOB_POSTING</loc>
+    <lastmod>2024-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://tennisforum.ai.kr/board/JOB_SEEKING</loc>
+    <lastmod>2024-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.9</priority>
+  </url>
+  <url>
+    <loc>https://tennisforum.ai.kr/board/COURT_TRANSFER</loc>
+    <lastmod>2024-07-29</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  <url>
+    <loc>https://tennisforum.ai.kr/board/FREE_BOARD</loc>
+    <lastmod>2024-07-29</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>0.8</priority>
+  </url>
+  
+  <!-- 정적 페이지 -->
+  <url>
+    <loc>https://tennisforum.ai.kr/terms</loc>
+    <lastmod>2024-07-29</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+  <url>
+    <loc>https://tennisforum.ai.kr/privacy</loc>
+    <lastmod>2024-07-29</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.5</priority>
+  </url>
+
+  <!-- 
+    참고: 
+    아래는 개별 게시물 페이지의 예시 URL 구조입니다.
+    현재 앱은 동적으로 게시물을 생성하므로, 향후 서버 측에서 
+    Firestore 데이터베이스를 읽어 이 sitemap.xml 파일을 자동으로
+    업데이트하는 기능을 추가하면 검색 엔진 최적화에 더 큰 도움이 됩니다.
+  -->
+  <!--
+  <url>
+    <loc>https://tennisforum.ai.kr/post/POST_ID_1</loc>
+    <lastmod>2024-07-28</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  <url>
+    <loc>https://tennisforum.ai.kr/post/POST_ID_2</loc>
+    <lastmod>2024-07-27</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  -->
+
+</urlset>
