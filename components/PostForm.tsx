@@ -391,7 +391,10 @@ const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel, activeCategory,
         postData.imageUrl = imageUrl || defaultImageUrl;
     } else {
         // For FREE_BOARD, keep original behavior (optional image).
-        postData.imageUrl = imageUrl ?? undefined;
+        // If imageUrl is null, don't set the property, to avoid Firestore error with `undefined`.
+        if (imageUrl) {
+            postData.imageUrl = imageUrl;
+        }
     }
 
     onSubmit(postData as NewPostData);
@@ -652,7 +655,7 @@ const PostForm: React.FC<PostFormProps> = ({ onSubmit, onCancel, activeCategory,
             {isJobRelated && (
                 <div>
                 <label className="inline-block bg-[#ff5710] text-white text-xs font-bold px-2.5 py-1 rounded-full mb-2">
-                    {isJobSeeking ? '지원분야' : '모집분야'}
+                    {isJobSeeking ? '지원분야' : '구인분야'}
                 </label>
                 <div className="flex items-center space-x-2">
                     <button

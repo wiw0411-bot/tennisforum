@@ -193,7 +193,7 @@ const PostListItem: React.FC<PostListItemProps> = ({ post, onSelectPost, onToggl
         <div className="flex justify-between items-start">
             <p className="text-xs text-gray-500 truncate pr-2">
                 {post.location}
-                {post.recruitmentField && <span> | 모집분야: {post.recruitmentField}</span>}
+                {post.recruitmentField && <span> | 구인분야: {post.recruitmentField}</span>}
             </p>
         </div>
         {workingInfo ? (

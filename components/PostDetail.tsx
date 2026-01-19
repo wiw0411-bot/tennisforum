@@ -187,7 +187,7 @@ const PostDetail: React.FC<PostDetailProps> = ({ post, onBack, currentUser, onDe
 
               {(isJobPosting || isJobSeeking) && post.recruitmentField && (
                 <div className="mb-6">
-                  <InfoTag>모집분야: {post.recruitmentField}</InfoTag>
+                  <InfoTag>{isJobPosting ? '구인분야' : '지원분야'}: {post.recruitmentField}</InfoTag>
                 </div>
               )}
               
