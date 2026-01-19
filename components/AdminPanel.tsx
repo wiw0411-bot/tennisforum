@@ -19,7 +19,8 @@ interface AdminPanelProps {
   advertisements: Advertisement[];
   onLogout: () => void;
   onDeletePost: (postId: string) => void;
-  onCreateAnnouncement: (announcement: Omit<Announcement, 'id' | 'createdAt'>) => void;
+  onCreateAnnouncement: (announcement: Omit<Announcement, 'id' | 'createdAt' | 'isActive'>) => void;
+  onUpdateAnnouncement: (annId: string, updates: Partial<Pick<Announcement, 'isActive'>>) => void;
   onDeleteAnnouncement: (announcementId: string) => void;
   onCreateAdvertisement: (ad: Omit<Advertisement, 'id' | 'createdAt' | 'isActive'>) => void;
   onUpdateAdvertisement: (adId: string, updates: Partial<Pick<Advertisement, 'isActive' | 'linkUrl'>>) => void;
@@ -211,10 +212,11 @@ const PostManagement: React.FC<{ posts: Post[]; onDeletePost: (postId: string) =
 
 const AnnouncementManagement: React.FC<{ 
     announcements: Announcement[], 
-    onCreateAnnouncement: (announcement: Omit<Announcement, 'id' | 'createdAt'>) => void, 
+    onCreateAnnouncement: (announcement: Omit<Announcement, 'id' | 'createdAt' | 'isActive'>) => void, 
+    onUpdateAnnouncement: (announcementId: string, updates: Partial<Pick<Announcement, 'isActive'>>) => void,
     onDeleteAnnouncement: (announcementId: string) => void,
     onSelectAnnouncement: (announcement: Announcement) => void 
-}> = ({ announcements, onCreateAnnouncement, onDeleteAnnouncement, onSelectAnnouncement }) => {
+}> = ({ announcements, onCreateAnnouncement, onUpdateAnnouncement, onDeleteAnnouncement, onSelectAnnouncement }) => {
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
     const contentEditableRef = useRef<HTMLDivElement>(null);
@@ -229,7 +231,7 @@ const AnnouncementManagement: React.FC<{
             alert('제목과 내용을 모두 입력해주세요.');
             return;
         }
-        const announcementData: Omit<Announcement, 'id' | 'createdAt'> = { title, content };
+        const announcementData: Omit<Announcement, 'id' | 'createdAt' | 'isActive'> = { title, content };
         if (imageUrl) {
           announcementData.imageUrl = imageUrl;
         }
@@ -328,14 +330,28 @@ const AnnouncementManagement: React.FC<{
                 <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden">
                     <ul className="divide-y divide-gray-200">
                         {sortedAnnouncements.map(ann => (
-                             <li key={ann.id} className="flex justify-between items-center">
-                                <div className="flex-grow cursor-pointer p-4 hover:bg-gray-50" onClick={() => onSelectAnnouncement(ann)}>
+                             <li key={ann.id} className="flex flex-col sm:flex-row justify-between items-start sm:items-center space-y-4 sm:space-y-0 hover:bg-gray-50">
+                                <div className="flex-grow cursor-pointer p-4" onClick={() => onSelectAnnouncement(ann)}>
                                     <p className="font-semibold text-gray-800">{ann.title}</p>
                                     <p className="text-xs text-gray-500 mt-1">{new Date(ann.createdAt).toLocaleDateString()}</p>
                                 </div>
-                                <button onClick={() => onDeleteAnnouncement(ann.id)} className="text-red-500 hover:text-red-700 p-4 flex-shrink-0 hover:bg-red-50">
-                                    <TrashIcon />
-                                </button>
+                                <div className="flex items-center space-x-4 self-end sm:self-center p-4">
+                                  <label className="flex items-center cursor-pointer">
+                                    <span className="text-sm font-medium text-gray-700 mr-2">활성화</span>
+                                    <div className="relative">
+                                      <input
+                                        type="checkbox"
+                                        className="sr-only peer"
+                                        checked={ann.isActive}
+                                        onChange={(e) => onUpdateAnnouncement(ann.id, { isActive: e.target.checked })}
+                                      />
+                                      <div className="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#ff5710]"></div>
+                                    </div>
+                                  </label>
+                                  <button onClick={() => onDeleteAnnouncement(ann.id)} className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-50">
+                                      <TrashIcon />
+                                  </button>
+                                </div>
                             </li>
                         ))}
                     </ul>
@@ -454,7 +470,7 @@ const AnnouncementDetailView: React.FC<{ announcement: Announcement; onBack: () 
 
 const AdminPanel: React.FC<AdminPanelProps> = ({ 
     currentUser, users, posts, announcements, advertisements, onLogout, onDeletePost, 
-    onCreateAnnouncement, onDeleteAnnouncement,
+    onCreateAnnouncement, onUpdateAnnouncement, onDeleteAnnouncement,
     onCreateAdvertisement, onUpdateAdvertisement, onDeleteAdvertisement
 }) => {
   const [activeTab, setActiveTab] = useState<'stats' | 'users' | 'posts' | 'announcements' | 'ads'>('stats');
@@ -537,7 +553,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
         {activeTab === 'stats' && <Statistics users={users} posts={posts} />}
         {activeTab === 'users' && <UserManagement users={users} posts={posts} />}
         {activeTab === 'posts' && <PostManagement posts={posts} onDeletePost={onDeletePost} onSelectPost={handleSelectPost} />}
-        {activeTab === 'announcements' && <AnnouncementManagement announcements={announcements} onCreateAnnouncement={onCreateAnnouncement} onDeleteAnnouncement={onDeleteAnnouncement} onSelectAnnouncement={handleSelectAnnouncement} />}
+        {activeTab === 'announcements' && <AnnouncementManagement announcements={announcements} onCreateAnnouncement={onCreateAnnouncement} onUpdateAnnouncement={onUpdateAnnouncement} onDeleteAnnouncement={onDeleteAnnouncement} onSelectAnnouncement={handleSelectAnnouncement} />}
         {activeTab === 'ads' && <AdManagement advertisements={advertisements} onCreateAdvertisement={onCreateAdvertisement} onUpdateAdvertisement={onUpdateAdvertisement} onDeleteAdvertisement={onDeleteAdvertisement} />}
       </main>
     </div>

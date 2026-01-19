@@ -101,6 +101,7 @@ const seedInitialData = async () => {
                 title: '테니스포럼 서비스 정식 오픈!',
                 content: '안녕하세요, 테니스 지도자와 관계자들을 위한 커뮤니티, 테니스포럼입니다. 많은 이용 부탁드립니다.',
                 createdAt: serverTimestamp(),
+                isActive: true,
             });
         }
         
@@ -441,14 +442,15 @@ const App: React.FC = () => {
   }, [posts, currentUser]);
 
 
-  const handleCreateAnnouncement = useCallback(async (newAnnouncement: Omit<Announcement, 'id' | 'createdAt'>) => {
+  const handleCreateAnnouncement = useCallback(async (newAnnouncement: Omit<Announcement, 'id' | 'createdAt' | 'isActive'>) => {
     try {
-        const dataToSave = { ...newAnnouncement, createdAt: serverTimestamp() };
+        const dataToSave = { ...newAnnouncement, isActive: true, createdAt: serverTimestamp() };
         const docRef = await addDoc(collection(db, 'announcements'), dataToSave);
         
         const announcementToAdd: Announcement = {
             id: docRef.id,
             ...newAnnouncement,
+            isActive: true,
             createdAt: new Date().toISOString(),
         };
         setAnnouncements(prev => [announcementToAdd, ...prev].sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
@@ -456,6 +458,17 @@ const App: React.FC = () => {
         handleFirestoreError(error, "공지사항 등록");
     }
   }, []);
+
+  const handleUpdateAnnouncement = useCallback(async (announcementId: string, updates: Partial<Pick<Announcement, 'isActive'>>) => {
+      const originalAnnouncements = announcements;
+      setAnnouncements(prev => prev.map(ann => ann.id === announcementId ? { ...ann, ...updates } : ann));
+      try {
+          await updateDoc(doc(db, 'announcements', announcementId), updates);
+      } catch (error) {
+          setAnnouncements(originalAnnouncements);
+          handleFirestoreError(error, "공지사항 업데이트");
+      }
+  }, [announcements]);
 
   const handleDeleteAnnouncement = useCallback(async (announcementId: string) => {
     if (window.confirm('정말로 이 공지사항을 삭제하시겠습니까?')) {
@@ -804,6 +817,7 @@ const App: React.FC = () => {
                 onLogout={handleLogout} 
                 onDeletePost={handleDeletePost} 
                 onCreateAnnouncement={handleCreateAnnouncement} 
+                onUpdateAnnouncement={handleUpdateAnnouncement}
                 onDeleteAnnouncement={handleDeleteAnnouncement}
                 onCreateAdvertisement={handleCreateAdvertisement}
                 onUpdateAdvertisement={handleUpdateAdvertisement}

@@ -3,7 +3,7 @@ import { Post, Category, Announcement, Advertisement } from '../types';
 import AdBanner from './AdBanner';
 import HorizontalPostSlider from './HorizontalPostSlider';
 import { CATEGORIES } from '../constants';
-import MegaphoneIcon from './icons/MegaphoneIcon';
+import AnnouncementTicker from './AnnouncementTicker';
 
 interface HomeScreenProps {
   posts: Post[];
@@ -40,9 +40,10 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ posts, announcements, advertise
         return grouped;
     }, [posts]);
 
-    const latestAnnouncement = useMemo(() => {
-        if (!announcements || announcements.length === 0) return null;
-        return [...announcements].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+    const activeAnnouncements = useMemo(() => {
+        return announcements
+            .filter(ann => ann.isActive)
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }, [announcements]);
   
   return (
@@ -77,18 +78,12 @@ const HomeScreen: React.FC<HomeScreenProps> = ({ posts, announcements, advertise
             </div>
         </section>
 
-        {latestAnnouncement && (
+        {activeAnnouncements.length > 0 && (
           <section className="px-4 pb-2">
-              <button 
-                  onClick={onShowAnnouncements}
-                  className="w-full bg-gray-100 rounded-full p-3 flex items-center space-x-3 text-left hover:bg-gray-200 transition-colors"
-                  aria-label={`공지사항: ${latestAnnouncement.title}`}
-              >
-                  <MegaphoneIcon className="w-5 h-5 text-[#fe5610] flex-shrink-0" />
-                  <span className="text-sm font-medium text-black truncate flex-1">
-                      {latestAnnouncement.title}
-                  </span>
-              </button>
+              <AnnouncementTicker 
+                  announcements={activeAnnouncements}
+                  onShowAnnouncements={onShowAnnouncements}
+              />
           </section>
         )}
         

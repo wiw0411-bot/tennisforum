@@ -1,4 +1,5 @@
 
+
 export enum Category {
   JOB_POSTING = 'JOB_POSTING',
   JOB_SEEKING = 'JOB_SEEKING',
@@ -69,6 +70,7 @@ export interface Announcement {
   content: string;
   createdAt: string;
   imageUrl?: string;
+  isActive: boolean;
 }
 
 export interface Advertisement {
