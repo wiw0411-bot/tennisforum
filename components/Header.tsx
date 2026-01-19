@@ -9,7 +9,7 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ activeCategory, setActiveCategory }) => {
   return (
-    <header className="bg-white sticky top-16 z-10 flex-shrink-0 px-4 py-3 border-b flex items-center justify-center">
+    <header className="bg-white z-10 flex-shrink-0 px-4 py-3 border-b flex items-center justify-center">
       <div className="min-w-0 overflow-x-auto whitespace-nowrap hide-scrollbar">
         <nav className="inline-flex items-center">
           {CATEGORIES.map((category, index) => (

@@ -693,53 +693,55 @@ const App: React.FC = () => {
                             </button>
                             <h1 className="text-lg font-bold text-gray-900">{categoryTitle}</h1>
                         </header>
-                        <div className="flex-shrink-0 bg-white px-4 pt-4">
-                            <AdBanner advertisements={advertisements} />
+                        <div className="flex-grow overflow-y-auto hide-scrollbar">
+                            <div className="flex-shrink-0 bg-white px-4 pt-4">
+                                <AdBanner advertisements={advertisements} />
+                            </div>
+                            <Header 
+                                activeCategory={activeCategory}
+                                setActiveCategory={handleSetActiveCategory}
+                            />
+                            <main>
+                               <div className="px-4 pt-4 flex-shrink-0 bg-white">
+                                 <div className="relative my-3">
+                                    <input 
+                                        type="text"
+                                        placeholder="제목, 작성자 검색"
+                                        value={searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        className="w-full bg-gray-100 rounded-full py-2 pl-4 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff5710] placeholder-gray-500 text-gray-800"
+                                    />
+                                    <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
+                                        <SearchIcon className="w-5 h-5 text-gray-400" />
+                                    </div>
+                                 </div>
+                               </div>
+                               <div className="overflow-hidden">
+                                    <div 
+                                        className="flex transition-transform duration-300 ease-in-out"
+                                        style={{ transform: `translateX(-${categoryIndex * 100}%)` }}
+                                    >
+                                        {CATEGORIES.map(category => (
+                                            <div key={category.id} className="w-full flex-shrink-0 px-4 pb-20">
+                                                {(postsByCategory[category.id] || []).length > 0 ? (
+                                                  <PostList 
+                                                      posts={postsByCategory[category.id] || []}
+                                                      onSelectPost={handleSelectPost}
+                                                      onToggleBookmark={handleToggleBookmark}
+                                                  />
+                                                ) : (
+                                                  <div className="text-center py-16">
+                                                    <p className="text-gray-500 text-sm">
+                                                      {searchQuery ? '검색 결과가 없습니다.' : '게시글이 없습니다.'}
+                                                    </p>
+                                                  </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                               </div>
+                            </main>
                         </div>
-                        <Header 
-                            activeCategory={activeCategory}
-                            setActiveCategory={handleSetActiveCategory}
-                        />
-                        <main className="flex-grow flex flex-col min-h-0">
-                           <div className="px-4 pt-4 flex-shrink-0">
-                             <div className="relative my-3">
-                                <input 
-                                    type="text"
-                                    placeholder="제목, 작성자 검색"
-                                    value={searchQuery}
-                                    onChange={(e) => setSearchQuery(e.target.value)}
-                                    className="w-full bg-gray-100 rounded-full py-2 pl-4 pr-10 text-sm focus:outline-none focus:ring-2 focus:ring-[#ff5710] placeholder-gray-500 text-gray-800"
-                                />
-                                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-                                    <SearchIcon className="w-5 h-5 text-gray-400" />
-                                </div>
-                             </div>
-                           </div>
-                           <div className="flex-grow overflow-hidden">
-                                <div 
-                                    className="h-full flex transition-transform duration-300 ease-in-out"
-                                    style={{ transform: `translateX(-${categoryIndex * 100}%)` }}
-                                >
-                                    {CATEGORIES.map(category => (
-                                        <div key={category.id} className="w-full flex-shrink-0 h-full overflow-y-auto hide-scrollbar px-4 pb-20">
-                                            {(postsByCategory[category.id] || []).length > 0 ? (
-                                              <PostList 
-                                                  posts={postsByCategory[category.id] || []}
-                                                  onSelectPost={handleSelectPost}
-                                                  onToggleBookmark={handleToggleBookmark}
-                                              />
-                                            ) : (
-                                              <div className="text-center py-16">
-                                                <p className="text-gray-500 text-sm">
-                                                  {searchQuery ? '검색 결과가 없습니다.' : '게시글이 없습니다.'}
-                                                </p>
-                                              </div>
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
-                           </div>
-                        </main>
                     </div>
                 );
         }
