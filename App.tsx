@@ -81,6 +81,14 @@ const seedInitialData = async () => {
                 title: '초보자용 라켓 추천해주세요!', content: '테니스 시작한지 얼마 안된 테린이입니다. 입문용으로 괜찮은 라켓 있으면 추천 부탁드립니다!',
                 views: 55, createdAt: serverTimestamp(), commentsAllowed: true,
             });
+
+            const freeBoardRef2 = doc(postsRef);
+            batch.set(freeBoardRef2, {
+                author: '스트링전문가', authorId: 'user_seed_4', category: Category.FREE_BOARD, location: '', subCategory: '정보 공유',
+                title: '[정보] 입문자를 위한 테니스 스트링 종류와 선택 가이드', 
+                content: '안녕하세요! 스트링만 바꿔도 테니스가 확 달라지는 경험, 다들 있으시죠?\n\n처음 시작하시는 분들을 위해 간단하게 스트링 종류를 정리해봤습니다.\n\n1. 폴리(Poly): 컨트롤과 스핀에 강점! 내구성이 좋아서 스트링이 자주 끊어지는 분들께 추천해요. 다만, 팔에 부담이 갈 수 있습니다.\n\n2. 멀티필라멘트(Multifilament): 부드러운 타구감과 파워가 장점! 팔이 편안해서 엘보우 등 부상 위험이 있는 분들께 좋습니다.\n\n3. 천연 GUT: 최고의 성능을 자랑하지만, 가격이 비싸고 습기에 약해 관리가 어렵습니다. 선수들이 많이 사용하죠.\n\n어떤 스트링을 선택해야 할지 고민이라면, 코치님이나 동호회 선배님들께 조언을 구하는 것이 가장 좋습니다! 다들 즐테하세요!',
+                views: 72, createdAt: serverTimestamp(), commentsAllowed: true,
+            });
         }
 
         const announcementsRef = collection(db, 'announcements');
