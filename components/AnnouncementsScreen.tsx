@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Announcement } from '../types';
 import ArrowLeftIcon from './icons/ArrowLeftIcon';
 import ChevronDownIcon from './icons/ChevronDownIcon';
+import { sanitizeHTML } from '../utills/sanitize';
 
 interface AnnouncementsScreenProps {
   announcements: Announcement[];
@@ -59,7 +60,7 @@ const AnnouncementsScreen: React.FC<AnnouncementsScreenProps> = ({ announcements
                     {ann.imageUrl && (
                         <img src={ann.imageUrl} alt={ann.title} className="w-full h-auto object-cover rounded-lg mb-4" />
                     )}
-                    <div className="text-sm text-gray-600 bg-gray-50 p-4 rounded-lg" dangerouslySetInnerHTML={{ __html: ann.content }} />
+                    <div className="text-sm text-gray-600 bg-gray-50 p-4 rounded-lg" dangerouslySetInnerHTML={{ __html: sanitizeHTML(ann.content) }} />
                   </div>
                 )}
               </div>

@@ -10,6 +10,7 @@ import ArrowLeftIcon from './icons/ArrowLeftIcon';
 import XIcon from './icons/XIcon';
 import { storage } from '../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { sanitizeHTML } from '../utills/sanitize';
 
 interface AdminPanelProps {
   currentUser: User | null;
@@ -461,7 +462,7 @@ const AnnouncementDetailView: React.FC<{ announcement: Announcement; onBack: () 
           {announcement.imageUrl && (
               <img src={announcement.imageUrl} alt={announcement.title} className="w-full h-auto object-cover rounded-lg my-4" />
           )}
-          <div className="text-sm text-gray-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: announcement.content }} />
+          <div className="text-sm text-gray-700 leading-relaxed" dangerouslySetInnerHTML={{ __html: sanitizeHTML(announcement.content) }} />
       </div>
     </main>
   </div>
