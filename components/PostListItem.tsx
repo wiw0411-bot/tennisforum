@@ -151,7 +151,7 @@ const PostListItem: React.FC<PostListItemProps> = ({ post, onSelectPost, onToggl
               alt={post.title}
             />
           ) : (
-            <img src="https://i.imgur.com/QO9rZCy.png" alt={post.title} className="w-16 h-16 object-cover rounded-lg" />
+            <img src="https://i.imgur.com/cLToLpX.png" alt={post.title} className="w-16 h-16 object-cover rounded-lg" />
           )}
         </div>
         <div className="flex-grow min-w-0 flex flex-col justify-between self-stretch">

@@ -179,6 +179,12 @@ const PostDetail: React.FC<PostDetailProps> = ({ post, onBack, currentUser, onDe
                   src={post.imageUrl}
                   alt={post.title}
                 />
+              ) : post.category === Category.FREE_BOARD ? (
+                <img
+                  className="w-full h-auto object-cover rounded-lg mb-6"
+                  src="https://i.imgur.com/cLToLpX.png"
+                  alt={post.title}
+                />
               ) : (
                 post.category !== Category.JOB_SEEKING && (
                   <DefaultPostIcon className="w-full h-auto object-cover rounded-lg mb-6" />

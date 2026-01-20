@@ -70,7 +70,7 @@ const PostCard: React.FC<PostCardProps> = ({ post, onSelectPost, hideImage = fal
               {post.imageUrl ? (
                 <img src={post.imageUrl} alt={post.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
               ) : post.category === Category.FREE_BOARD ? (
-                <img src="https://i.imgur.com/QO9rZCy.png" alt={post.title} className="w-full h-full object-cover" />
+                <img src="https://i.imgur.com/cLToLpX.png" alt={post.title} className="w-full h-full object-cover" />
               ) : (
                 <DefaultPostIcon className="w-full h-full" />
               )}
