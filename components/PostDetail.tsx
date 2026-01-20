@@ -9,8 +9,9 @@ import CalendarDaysIcon from './icons/CalendarDaysIcon';
 import ClockIcon from './icons/ClockIcon';
 import WalletIcon from './icons/WalletIcon';
 import CommentIcon from './icons/CommentIcon';
+import TrashIcon from './icons/TrashIcon';
 import { db } from '../firebase';
-import { collection, query, orderBy, getDocs, addDoc, serverTimestamp, Timestamp } from 'firebase/firestore';
+import { collection, query, orderBy, getDocs, addDoc, serverTimestamp, Timestamp, doc, writeBatch, increment, deleteDoc } from 'firebase/firestore';
 
 interface PostDetailProps {
   post: Post;
@@ -18,9 +19,11 @@ interface PostDetailProps {
   currentUser: User | null;
   onDeletePost: (postId: string) => void;
   onEditPost?: (post: Post) => void;
+  onRequestLogin: () => void;
+  onPostUpdate: (updatedPost: Post) => void;
 }
 
-const PostDetail: React.FC<PostDetailProps> = ({ post, onBack, currentUser, onDeletePost, onEditPost }) => {
+const PostDetail: React.FC<PostDetailProps> = ({ post, onBack, currentUser, onDeletePost, onEditPost, onRequestLogin, onPostUpdate }) => {
   const [comments, setComments] = useState<Comment[]>([]);
   const [newComment, setNewComment] = useState('');
   const [isLoadingComments, setIsLoadingComments] = useState(true);
@@ -29,6 +32,12 @@ const PostDetail: React.FC<PostDetailProps> = ({ post, onBack, currentUser, onDe
   const workingDaysDisplay = formatDays(post.workingDays);
   
   const fetchComments = useCallback(async () => {
+    if (!currentUser) {
+      setComments([]);
+      setIsLoadingComments(false);
+      return;
+    }
+    
     try {
         setIsLoadingComments(true);
         const commentsRef = collection(db, `posts/${post.id}/comments`);
@@ -48,17 +57,22 @@ const PostDetail: React.FC<PostDetailProps> = ({ post, onBack, currentUser, onDe
     } finally {
         setIsLoadingComments(false);
     }
-  }, [post.id]);
+  }, [post.id, currentUser]);
 
   useEffect(() => {
     if (post.commentsAllowed) {
         fetchComments();
+    } else {
+        setIsLoadingComments(false);
     }
-  }, [post.id, post.commentsAllowed, fetchComments]);
+  }, [post.commentsAllowed, fetchComments]);
 
   const handleCommentSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newComment.trim() || !currentUser) return;
+    if (!newComment.trim() || !currentUser) {
+        onRequestLogin();
+        return;
+    }
     
     const commentData = {
       author: currentUser.name,
@@ -69,9 +83,19 @@ const PostDetail: React.FC<PostDetailProps> = ({ post, onBack, currentUser, onDe
     };
     
     try {
-        const commentsRef = collection(db, `posts/${post.id}/comments`);
-        await addDoc(commentsRef, commentData);
+        const postRef = doc(db, 'posts', post.id);
+        const newCommentRef = doc(collection(db, `posts/${post.id}/comments`));
+
+        const batch = writeBatch(db);
+        batch.set(newCommentRef, commentData);
+        batch.update(postRef, { commentCount: increment(1) });
+        await batch.commit();
+        
         setNewComment('');
+        
+        const updatedPost = { ...post, commentCount: (post.commentCount || 0) + 1 };
+        onPostUpdate(updatedPost);
+
         fetchComments(); // Re-fetch comments to show the new one
     } catch (error: any) {
         console.error("Error adding comment:", error);
@@ -81,6 +105,30 @@ const PostDetail: React.FC<PostDetailProps> = ({ post, onBack, currentUser, onDe
             alert("댓글 등록에 실패했습니다.");
         }
     }
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+      if (!currentUser || !window.confirm('정말로 이 댓글을 삭제하시겠습니까?')) {
+          return;
+      }
+      
+      try {
+          const postRef = doc(db, 'posts', post.id);
+          const commentRef = doc(db, `posts/${post.id}/comments`, commentId);
+
+          const batch = writeBatch(db);
+          batch.delete(commentRef);
+          batch.update(postRef, { commentCount: increment(-1) });
+          await batch.commit();
+
+          const updatedPost = { ...post, commentCount: Math.max(0, (post.commentCount || 0) - 1) };
+          onPostUpdate(updatedPost);
+          
+          fetchComments(); // Re-fetch
+      } catch (error) {
+          console.error("Error deleting comment:", error);
+          alert("댓글 삭제에 실패했습니다.");
+      }
   };
 
   const InfoPill: React.FC<{ icon: React.ReactNode; children: React.ReactNode }> = ({ icon, children }) => (
@@ -291,38 +339,58 @@ const PostDetail: React.FC<PostDetailProps> = ({ post, onBack, currentUser, onDe
                   <>
                   <div className="flex items-center text-gray-800 mb-4">
                       <CommentIcon />
-                      <h2 className="text-base font-bold ml-2">댓글 {comments.length}개</h2>
+                      <h2 className="text-base font-bold ml-2">댓글 {(post.commentCount || 0)}개</h2>
                   </div>
                   
-                  <div className="space-y-2 divide-y divide-gray-100 mb-6">
-                      {isLoadingComments ? (
-                        <div className="text-center py-4 text-sm text-gray-500">댓글을 불러오는 중...</div>
-                      ) : (
-                        comments.map(comment => (
-                          <div key={comment.id} className="pt-3 first:pt-0">
-                              <div className="flex items-center space-x-2">
-                                  <p className="text-xs font-medium text-gray-800">{comment.author}</p>
-                                  <p className="text-xs text-gray-400">{new Date(comment.createdAt).toLocaleDateString()}</p>
+                  {currentUser ? (
+                    <>
+                      <div className="space-y-2 divide-y divide-gray-100 mb-6">
+                          {isLoadingComments ? (
+                            <div className="text-center py-4 text-sm text-gray-500">댓글을 불러오는 중...</div>
+                          ) : comments.length > 0 ? (
+                            comments.map(comment => (
+                              <div key={comment.id} className="pt-3 first:pt-0">
+                                  <div className="flex items-start justify-between">
+                                    <div>
+                                        <div className="flex items-center space-x-2">
+                                            <p className="text-xs font-medium text-gray-800">{comment.author}</p>
+                                            <p className="text-xs text-gray-400">{new Date(comment.createdAt).toLocaleDateString()}</p>
+                                        </div>
+                                        <p className="text-xs mt-1 text-gray-700">{comment.content}</p>
+                                    </div>
+                                    {currentUser && (currentUser.id === comment.authorId || currentUser.id === post.authorId || currentUser.role === 'admin') && (
+                                        <button onClick={() => handleDeleteComment(comment.id)} className="text-gray-400 hover:text-red-500 p-1 flex-shrink-0">
+                                            <TrashIcon />
+                                        </button>
+                                    )}
+                                  </div>
                               </div>
-                              <p className="text-xs mt-1 text-gray-700">{comment.content}</p>
-                          </div>
-                        ))
-                      )}
-                  </div>
+                            ))
+                          ) : (
+                            <div className="text-center py-4 text-sm text-gray-500">등록된 댓글이 없습니다.</div>
+                          )}
+                      </div>
 
-                  {currentUser && (
-                    <form onSubmit={handleCommentSubmit} className="mt-6 flex items-start space-x-3">
-                        <textarea
-                        value={newComment}
-                        onChange={(e) => setNewComment(e.target.value)}
-                        placeholder="댓글을 입력하세요..."
-                        className="flex-1 bg-gray-100 text-gray-900 placeholder-gray-500 rounded-lg px-4 py-2 border border-transparent focus:outline-none focus:ring-2 focus:ring-[#ff5710] focus:border-transparent resize-none text-sm"
-                        rows={2}
-                        />
-                        <button type="submit" className="px-4 py-2 bg-[#ff5710] text-white font-semibold rounded-lg hover:bg-[#e64e0e] transition-colors disabled:bg-[#ffc2aa] text-sm" disabled={!newComment.trim()}>
-                        등록
+                      <form onSubmit={handleCommentSubmit} className="mt-6 flex items-start space-x-3">
+                          <textarea
+                          value={newComment}
+                          onChange={(e) => setNewComment(e.target.value)}
+                          placeholder="댓글을 입력하세요..."
+                          className="flex-1 bg-gray-100 text-gray-900 placeholder-gray-500 rounded-lg px-4 py-2 border border-transparent focus:outline-none focus:ring-2 focus:ring-[#ff5710] focus:border-transparent resize-none text-sm"
+                          rows={2}
+                          />
+                          <button type="submit" className="px-4 py-2 bg-[#ff5710] text-white font-semibold rounded-lg hover:bg-[#e64e0e] transition-colors disabled:bg-[#ffc2aa] text-sm" disabled={!newComment.trim()}>
+                          등록
+                          </button>
+                      </form>
+                    </>
+                  ) : (
+                    <div className="mt-6 text-center p-4 bg-gray-50 rounded-lg border">
+                        <p className="text-sm text-gray-600 mb-3">댓글을 보거나 작성하시려면 로그인이 필요합니다.</p>
+                        <button onClick={onRequestLogin} className="px-6 py-2 bg-[#ff5710] text-white font-semibold rounded-lg hover:bg-[#e64e0e] transition-colors text-sm">
+                        로그인
                         </button>
-                    </form>
+                    </div>
                   )}
                   </>
               ) : (

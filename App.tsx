@@ -1,5 +1,3 @@
-
-
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { Post, Category, Comment, Announcement, User, Notification, NotificationType, Advertisement } from './types';
 import { CATEGORIES } from './constants';
@@ -136,6 +134,7 @@ const App: React.FC = () => {
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [pendingVerification, setPendingVerification] = useState(false);
   const [verificationEmail, setVerificationEmail] = useState<string | null>(null);
+  const [isLoginRequired, setIsLoginRequired] = useState(false);
 
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [advertisements, setAdvertisements] = useState<Advertisement[]>([]);
@@ -146,14 +145,13 @@ const App: React.FC = () => {
   // Data loading state
   const [isDataLoading, setIsDataLoading] = useState(true);
 
-  const clearData = () => {
-      setPosts([]);
-      setAnnouncements([]);
-      setAdvertisements([]);
+  const clearUserData = () => {
       setUsers([]);
       setBookmarkedPostIds(new Set());
   }
   
+  const requireLogin = useCallback(() => setIsLoginRequired(true), []);
+
   useEffect(() => {
     // FIX: Use namespaced firebase auth function.
     const unsubscribe = firebaseAuth.onAuthStateChanged(auth, async (userAuth) => {
@@ -163,7 +161,9 @@ const App: React.FC = () => {
             setPendingVerification(true);
             setIsAuthenticated(false);
             setCurrentUser(null);
+            clearUserData();
         } else {
+            setIsLoginRequired(false);
             setPendingVerification(false);
             setVerificationEmail(null);
 
@@ -210,40 +210,27 @@ const App: React.FC = () => {
         setVerificationEmail(null);
         setCurrentUser(null);
         setIsAuthenticated(false);
-        clearData();
+        clearUserData();
       }
       setIsAuthLoading(false);
     });
     return () => unsubscribe();
   }, []);
-
+  
+  // Fetch public data on initial load
   useEffect(() => {
-    const fetchAllData = async () => {
-        if (!currentUser) {
-            clearData();
-            setIsDataLoading(false);
-            return;
-        }
-
+    const fetchPublicData = async () => {
         setIsDataLoading(true);
         try {
-            await seedInitialData();
+            // NOTE: Seeding data is an admin action and should not be run on the client-side for every user.
+            // await seedInitialData();
 
-            const [
-                postsSnapshot, 
-                announcementsSnapshot, 
-                advertisementsSnapshot,
-                bookmarksSnapshot
-            ] = await Promise.all([
-                getDocs(collection(db, 'posts')),
-                getDocs(collection(db, 'announcements')),
-                getDocs(collection(db, 'advertisements')),
-                getDocs(collection(db, `users/${currentUser.id}/bookmarks`))
+            const [postsSnapshot, announcementsSnapshot, advertisementsSnapshot] = await Promise.all([
+                getDocs(query(collection(db, 'posts'), orderBy('createdAt', 'desc'))),
+                getDocs(query(collection(db, 'announcements'), orderBy('createdAt', 'desc'))),
+                getDocs(query(collection(db, 'advertisements'), orderBy('createdAt', 'desc')))
             ]);
 
-            const bookmarkIds = new Set<string>(bookmarksSnapshot.docs.map(doc => doc.id));
-            setBookmarkedPostIds(bookmarkIds);
-            
             const postList = postsSnapshot.docs.map(doc => {
                 const data = doc.data();
                 return { 
@@ -256,40 +243,48 @@ const App: React.FC = () => {
 
             const announcementList = announcementsSnapshot.docs.map(doc => {
                 const data = doc.data();
-                return { 
-                    id: doc.id, 
-                    ...data, 
-                    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : new Date().toISOString() 
-                } as Announcement;
+                return { id: doc.id, ...data, createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : new Date().toISOString() } as Announcement;
             });
-            setAnnouncements(announcementList.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+            setAnnouncements(announcementList);
 
             const adList = advertisementsSnapshot.docs.map(doc => {
                 const data = doc.data();
-                return { 
-                    id: doc.id, 
-                    ...data, 
-                    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : new Date().toISOString() 
-                } as Advertisement;
+                return { id: doc.id, ...data, createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : new Date().toISOString() } as Advertisement;
             });
-            setAdvertisements(adList.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+            setAdvertisements(adList);
+        } catch (error) {
+            handleFirestoreError(error, "공개 데이터 로딩");
+        } finally {
+            setIsDataLoading(false);
+        }
+    };
+    fetchPublicData();
+  }, []);
+
+  // Fetch user-specific data when user logs in or out
+  useEffect(() => {
+    const fetchUserData = async () => {
+        if (!currentUser) {
+            clearUserData();
+            return;
+        }
+
+        try {
+            const bookmarksSnapshot = await getDocs(collection(db, `users/${currentUser.id}/bookmarks`));
+            const bookmarkIds = new Set<string>(bookmarksSnapshot.docs.map(doc => doc.id));
+            setBookmarkedPostIds(bookmarkIds);
 
             if (currentUser.role === 'admin') {
                 const usersSnapshot = await getDocs(collection(db, 'users'));
                 const userList = usersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User));
                 setUsers(userList);
-            } else {
-                setUsers([]);
             }
-
         } catch (error) {
-            handleFirestoreError(error, "데이터 로딩");
-        } finally {
-            setIsDataLoading(false);
+            handleFirestoreError(error, "사용자 데이터 로딩");
         }
     };
     
-    fetchAllData();
+    fetchUserData();
   }, [currentUser]);
 
   const [viewingPrivacyPolicy, setViewingPrivacyPolicy] = useState(false);
@@ -356,7 +351,15 @@ const App: React.FC = () => {
   const handleHideTerms = useCallback(() => setViewingTerms(false), []);
   const handleShowAnnouncements = useCallback(() => setViewingAnnouncements(true), []);
   const handleHideAnnouncements = useCallback(() => setViewingAnnouncements(false), []);
-  const handleShowProfileEdit = useCallback(() => setIsEditingProfile(true), []);
+  
+  const handleShowProfileEdit = useCallback(() => {
+      if (!currentUser) {
+          requireLogin();
+          return;
+      }
+      setIsEditingProfile(true);
+  }, [currentUser, requireLogin]);
+
   const handleHideProfileEdit = useCallback(() => setIsEditingProfile(false), []);
 
   const handleUpdateProfile = useCallback(async (profileData: { name: string; avatarUrl: string | undefined }) => {
@@ -376,26 +379,28 @@ const App: React.FC = () => {
   }, [currentUser]);
 
   const handleSelectPost = useCallback((postToSelect: Post) => {
+    const updatedPost = { ...postToSelect, views: (postToSelect.views || 0) + 1 };
+    
+    // Optimistically update UI for a smoother experience
+    setPosts(prevPosts => prevPosts.map(p => p.id === postToSelect.id ? updatedPost : p));
+    setSelectedPost(updatedPost);
+    setIsCreatingPost(false);
+    setEditingPost(null);
+
+    // Always attempt to update Firestore for view count
     try {
         const postRef = doc(db, 'posts', postToSelect.id);
         updateDoc(postRef, { views: increment(1) });
-        
-        const updatedPost = { ...postToSelect, views: (postToSelect.views || 0) + 1 };
-        setPosts(prevPosts => prevPosts.map(p => p.id === postToSelect.id ? updatedPost : p));
-        setSelectedPost(updatedPost);
-        setIsCreatingPost(false);
-        setEditingPost(null);
     } catch (error) {
-        handleFirestoreError(error, "조회수 업데이트");
-        setSelectedPost(postToSelect);
-        setIsCreatingPost(false);
-        setEditingPost(null);
+        // Log the error but don't bother the user with an alert,
+        // as the UI has already been updated and the rule change should prevent this.
+        console.error(`Firestore error (조회수 업데이트):`, error);
     }
   }, []);
   
   const handleToggleBookmark = useCallback(async (postId: string) => {
     if (!currentUser) {
-        alert("로그인이 필요합니다.");
+        requireLogin();
         return;
     }
 
@@ -414,7 +419,7 @@ const App: React.FC = () => {
     } catch (error) {
         handleFirestoreError(error, "북마크 변경");
     }
-  }, [currentUser, bookmarkedPostIds]);
+  }, [currentUser, bookmarkedPostIds, requireLogin]);
   
   const handleDeletePost = useCallback(async (postId: string) => {
     const postToDelete = posts.find(p => p.id === postId);
@@ -533,17 +538,21 @@ const App: React.FC = () => {
   }, []);
   
   const handleShowCreateForm = useCallback(() => {
+    if (!currentUser) {
+        requireLogin();
+        return;
+    }
     setSelectedPost(null);
     setEditingPost(null);
     setActiveTab('home');
     setIsCreatingPost(true);
-  }, []);
+  }, [currentUser, requireLogin]);
 
   const handleCancelCreate = useCallback(() => setIsCreatingPost(false), []);
 
   const handleCreatePost = useCallback(async (newPostData: Omit<Post, 'id' | 'createdAt' | 'views'>) => {
     if (!currentUser) {
-        alert("로그인이 필요합니다.");
+        requireLogin();
         return;
     }
 
@@ -553,6 +562,7 @@ const App: React.FC = () => {
       author: newPostData.category === Category.JOB_SEEKING ? currentUser.name : newPostData.title,
       ...(currentUser.avatarUrl && { authorAvatar: currentUser.avatarUrl }),
       views: 0,
+      commentCount: 0,
       createdAt: serverTimestamp(),
     };
 
@@ -567,6 +577,7 @@ const App: React.FC = () => {
         author: newPostData.category === Category.JOB_SEEKING ? currentUser.name : newPostData.title,
         ...(currentUser.avatarUrl && { authorAvatar: currentUser.avatarUrl }),
         views: 0,
+        commentCount: 0,
         createdAt: new Date().toISOString(),
       };
 
@@ -577,7 +588,7 @@ const App: React.FC = () => {
     } catch (error) {
         handleFirestoreError(error, "게시물 등록");
     }
-  }, [currentUser]);
+  }, [currentUser, requireLogin]);
 
   const handleShowEditForm = useCallback((postToEdit: Post) => {
       setSelectedPost(null);
@@ -605,7 +616,18 @@ const App: React.FC = () => {
     }
   }, [editingPost, handleSelectPost]);
   
+  const handlePostUpdate = useCallback((updatedPost: Post) => {
+      setSelectedPost(updatedPost);
+      setPosts(prev => prev.map(p => p.id === updatedPost.id ? updatedPost : p));
+  }, []);
+
   const handleTabChange = useCallback((tab: 'home' | 'schedule' | 'notifications' | 'myInfo') => {
+    const isProtectedTab = tab === 'schedule' || tab === 'notifications' || tab === 'myInfo';
+    if(isProtectedTab && !isAuthenticated) {
+        requireLogin();
+        return;
+    }
+    
     setSelectedPost(null);
     setIsCreatingPost(false);
     setEditingPost(null);
@@ -621,7 +643,7 @@ const App: React.FC = () => {
     } else {
         setCurrentScreen('list');
     }
-  }, [activeTab]);
+  }, [activeTab, isAuthenticated, requireLogin]);
   
   const handleShowMyPosts = useCallback(() => setCurrentScreen('myPosts'), []);
   const handleShowMyBookmarks = useCallback(() => setCurrentScreen('myBookmarks'), []);
@@ -640,11 +662,8 @@ const App: React.FC = () => {
 
 
   const renderContent = () => {
-    if (isAuthLoading || isDataLoading) {
-       return <div className="flex h-full items-center justify-center"><p>데이터를 불러오는 중...</p></div>;
-    }
     if (selectedPost) {
-      return <PostDetail post={selectedPost} onBack={handleBackToList} currentUser={currentUser} onDeletePost={handleDeletePost} onEditPost={handleShowEditForm} />;
+      return <PostDetail post={selectedPost} onBack={handleBackToList} currentUser={currentUser} onDeletePost={handleDeletePost} onEditPost={handleShowEditForm} onRequestLogin={requireLogin} onPostUpdate={handlePostUpdate} />;
     }
     if (editingPost) {
       return <PostForm 
@@ -763,7 +782,7 @@ const App: React.FC = () => {
     return (
         <>
             {mainContent()}
-            {isAuthenticated && activeTab === 'home' && homeView === 'board' && !isCreatingPost && !selectedPost && <CreatePostButton onClick={handleShowCreateForm} />}
+            {activeTab === 'home' && homeView === 'board' && !isCreatingPost && !selectedPost && <CreatePostButton onClick={handleShowCreateForm} />}
             <BottomNav 
                 activeTab={activeTab} 
                 onTabChange={handleTabChange}
@@ -776,16 +795,20 @@ const App: React.FC = () => {
     return <div className="bg-white h-full font-sans w-full max-w-md mx-auto flex flex-col overflow-hidden border border-gray-100 shadow-lg relative"><SplashScreen onFinish={handleSplashFinish} /></div>;
   }
   
-  if (isAuthLoading) {
+  if (isAuthLoading || isDataLoading) {
      return (
         <div className="bg-white h-full font-sans w-full max-w-md mx-auto flex flex-col overflow-hidden border border-gray-100 shadow-lg relative">
             <div className="flex h-full items-center justify-center">
-                <p>인증 정보를 확인하는 중...</p>
+                <p>데이터를 불러오는 중...</p>
             </div>
         </div>
      );
   }
-
+  
+  if (isLoginRequired) {
+    return <LoginScreen onShowPrivacyPolicy={handleShowPrivacyPolicy} onShowTerms={handleShowTerms} onBack={() => setIsLoginRequired(false)} />;
+  }
+  
   if (viewingPrivacyPolicy) {
     return <div className="bg-white h-full font-sans w-full max-w-md mx-auto flex flex-col overflow-hidden border border-gray-100 shadow-lg relative"><PrivacyPolicy onBack={handleHidePrivacyPolicy} /></div>;
   }
@@ -801,10 +824,6 @@ const App: React.FC = () => {
   
   if (pendingVerification) {
     return <EmailVerificationScreen email={verificationEmail} onBackToLogin={() => firebaseAuth.signOut(auth)} />;
-  }
-
-  if (!isAuthenticated) {
-    return <LoginScreen onShowPrivacyPolicy={handleShowPrivacyPolicy} onShowTerms={handleShowTerms} />;
   }
   
   if (currentUser?.role === 'admin') {

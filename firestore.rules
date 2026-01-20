@@ -47,33 +47,49 @@ service cloud.firestore {
 
     // --- Posts and Comments ---
     match /posts/{postId} {
-      allow get, list: if isSignedIn();
+      // [기능 변경] 비로그인 사용자도 게시물을 읽을 수 있도록 허용합니다.
+      allow get, list: if true;
       
-      // [보안 강화] 게시물 생성 시 데이터 유효성을 검사합니다. (작성자 ID 일치, 제목 존재, 조회수 0 등)
+      // [보안 강화] 게시물 생성 시 데이터 유효성을 검사합니다. (작성자 ID 일치, 제목 존재, 조회수/댓글 수 0 등)
       allow create: if isSignedIn()
                     && request.resource.data.authorId == request.auth.uid
                     && request.resource.data.title is string && request.resource.data.title.size() > 0
                     && request.resource.data.views == 0
+                    && request.resource.data.commentCount == 0
                     && request.resource.data.createdAt == request.time;
       
-      // [기능 수정 및 보안 강화]
-      // 1. 게시물 작성자 또는 관리자는 게시물을 수정/삭제할 수 있습니다. (작성자, 작성일 등은 변경 불가)
-      // 2. 모든 로그인 사용자는 다른 내용은 변경하지 않고 '조회수'만 1씩 증가시킬 수 있습니다.
+      // [보안 강화] 게시물 수정 권한을 세분화하여 데이터 무결성을 강화합니다.
       allow update: if (isAdmin())
-                    || (request.auth.uid == resource.data.authorId 
+                    || (
+                        // 게시물 작성자는 조회수(views)나 댓글 수(commentCount)를 제외한 필드만 수정할 수 있습니다.
+                        request.auth.uid == resource.data.authorId 
                         && request.resource.data.authorId == resource.data.authorId
-                        && request.resource.data.createdAt == resource.data.createdAt)
-                    || (isSignedIn()
-                        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views'])
-                        && request.resource.data.views == resource.data.views + 1);
+                        && request.resource.data.createdAt == resource.data.createdAt
+                        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['views', 'commentCount'])
+                       )
+                    || (
+                        // 모든 사용자는 조회수(views)를 1씩 증가시키는 것만 허용됩니다.
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['views'])
+                        && request.resource.data.views == resource.data.views + 1
+                       )
+                    || (
+                        // 로그인한 사용자는 댓글 수(commentCount)를 1씩 증감시키는 것만 허용됩니다. (댓글 작성/삭제 시)
+                        isSignedIn() &&
+                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['commentCount'])
+                        && (
+                          request.resource.data.commentCount == resource.data.commentCount + 1 ||
+                          request.resource.data.commentCount == resource.data.commentCount - 1
+                        )
+                       );
 
       allow delete: if request.auth.uid == resource.data.authorId || isAdmin();
 
       // Comments Subcollection
       match /comments/{commentId} {
+        // [보안 강화] 로그인한 사용자만 댓글을 읽거나 작성할 수 있습니다.
         allow get, list, create: if isSignedIn();
         
-        // 댓글 작성자, 게시물 작성자, 또는 관리자만 댓글을 삭제할 수 있습니다. (기존 규칙 유지)
+        // 댓글 작성자, 게시물 작성자, 또는 관리자만 댓글을 삭제할 수 있습니다.
         allow delete: if (request.auth.uid == resource.data.authorId)
                       || (request.auth.uid == get(/databases/$(database)/documents/posts/$(postId)).data.authorId)
                       || isAdmin();
@@ -82,12 +98,14 @@ service cloud.firestore {
 
     // --- Announcements & Advertisements (Admin Only) ---
     match /announcements/{announcementId} {
-      allow get, list: if isSignedIn();
+      // [기능 변경] 비로그인 사용자도 공지사항/광고를 읽을 수 있도록 허용합니다.
+      allow get, list: if true;
       allow create, update, delete: if isAdmin();
     }
 
     match /advertisements/{adId} {
-      allow get, list: if isSignedIn();
+      // [기능 변경] 비로그인 사용자도 공지사항/광고를 읽을 수 있도록 허용합니다.
+      allow get, list: if true;
       allow create, update, delete: if isAdmin();
     }
 

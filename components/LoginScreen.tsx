@@ -4,15 +4,17 @@ import { auth, db } from '../firebase';
 import * as firebaseAuth from 'firebase/auth';
 import { doc, getDoc, setDoc, writeBatch } from 'firebase/firestore';
 import { User } from '../types';
+import ArrowLeftIcon from './icons/ArrowLeftIcon';
 
 import { loginBackgroundImage } from '../assets/imageAssets';
 
 interface LoginScreenProps {
   onShowPrivacyPolicy: () => void;
   onShowTerms: () => void;
+  onBack: () => void;
 }
 
-const LoginScreen: React.FC<LoginScreenProps> = ({ onShowPrivacyPolicy, onShowTerms }) => {
+const LoginScreen: React.FC<LoginScreenProps> = ({ onShowPrivacyPolicy, onShowTerms, onBack }) => {
   const [isLoginView, setIsLoginView] = useState(true);
   
   // Common fields
@@ -329,7 +331,14 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onShowPrivacyPolicy, onShowTe
   )
 
   return (
-    <div className="bg-white h-full font-sans w-full max-w-md mx-auto flex flex-col animate-fade-in overflow-hidden border border-gray-100 shadow-lg">
+    <div className="bg-white h-full font-sans w-full max-w-md mx-auto flex flex-col animate-fade-in overflow-hidden border border-gray-100 shadow-lg relative">
+      <button
+        onClick={onBack}
+        className="absolute top-4 left-4 p-2 text-white bg-black/20 hover:bg-black/40 rounded-full z-20"
+        aria-label="뒤로가기"
+      >
+        <ArrowLeftIcon />
+      </button>
       <div 
         className="relative flex-grow flex flex-col items-center justify-center text-center p-8 shadow-lg bg-cover bg-center"
         style={{ backgroundImage: `url(${loginBackgroundImage})` }}

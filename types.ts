@@ -36,6 +36,7 @@ export interface Post {
   imageUrl?: string;
   contentImages?: string[];
   views: number;
+  commentCount?: number;
   createdAt: string;
   commentsAllowed: boolean;
   comments?: Comment[];
