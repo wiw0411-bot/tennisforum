@@ -35,10 +35,35 @@ const StatCard: React.FC<{ title: string; value: string | number; }> = ({ title,
     </div>
 );
 
+const PeriodSelector: React.FC<{
+  selectedDays: number;
+  onSelectDays: (days: number) => void;
+  options?: number[];
+}> = ({ selectedDays, onSelectDays, options = [30, 90, 365] }) => (
+  <div className="flex space-x-1 rounded-lg bg-gray-200 p-0.5">
+    {options.map(days => (
+      <button
+        key={days}
+        onClick={() => onSelectDays(days)}
+        className={`px-2 py-0.5 text-xs font-semibold rounded-md transition-colors ${
+          selectedDays === days
+            ? 'bg-white text-[#ff5710] shadow-sm'
+            : 'bg-transparent text-gray-600 hover:bg-white/50'
+        }`}
+      >
+        {days === 365 ? '1년' : `${days}일`}
+      </button>
+    ))}
+  </div>
+);
+
 
 const Statistics: React.FC<{ users: User[]; posts: Post[]; }> = ({ users, posts }) => {
     const totalViews = useMemo(() => posts.reduce((sum, post) => sum + post.views, 0), [posts]);
-    const totalComments = useMemo(() => posts.reduce((sum, post) => sum + (post.comments?.length || 0), 0), [posts]);
+    const totalComments = useMemo(() => posts.reduce((sum, post) => sum + (post.commentCount || 0), 0), [posts]);
+    
+    const [userChartDays, setUserChartDays] = useState(30);
+    const [postChartDays, setPostChartDays] = useState(30);
 
     const userStats = useMemo(() => {
         const today = new Date();
@@ -75,7 +100,7 @@ const Statistics: React.FC<{ users: User[]; posts: Post[]; }> = ({ users, posts 
 
         const sortedDailySignups = Object.entries(dailySignups)
             .sort(([dateA], [dateB]) => new Date(dateB).getTime() - new Date(dateA).getTime())
-            .slice(0, 15)
+            .slice(0, userChartDays)
             .reverse();
 
         return {
@@ -85,44 +110,132 @@ const Statistics: React.FC<{ users: User[]; posts: Post[]; }> = ({ users, posts 
             monthSignups,
             dailySignups: sortedDailySignups,
         };
-    }, [users]);
+    }, [users, userChartDays]);
+
+    const postStats = useMemo(() => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const oneWeekAgo = new Date();
+        oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+        oneWeekAgo.setHours(0,0,0,0);
+
+        const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+
+        let todayPosts = 0;
+        let weekPosts = 0;
+        let monthPosts = 0;
+        const dailyPosts: { [key: string]: number } = {};
+
+        posts.forEach(post => {
+            if(!post.createdAt) return;
+            const createdAt = new Date(post.createdAt);
+            
+            if (createdAt >= today) {
+                todayPosts++;
+            }
+            if (createdAt >= oneWeekAgo) {
+                weekPosts++;
+            }
+            if (createdAt >= startOfMonth) {
+                monthPosts++;
+            }
+
+            const dateKey = createdAt.toISOString().split('T')[0];
+            dailyPosts[dateKey] = (dailyPosts[dateKey] || 0) + 1;
+        });
+
+        const sortedDailyPosts = Object.entries(dailyPosts)
+            .sort(([dateA], [dateB]) => new Date(dateB).getTime() - new Date(dateA).getTime())
+            .slice(0, postChartDays)
+            .reverse();
+
+        return {
+            totalPosts: posts.length,
+            todayPosts,
+            weekPosts,
+            monthPosts,
+            dailyPosts: sortedDailyPosts,
+        };
+    }, [posts, postChartDays]);
 
     const maxDailySignup = useMemo(() => {
         if (userStats.dailySignups.length === 0) return 1;
         return Math.max(...userStats.dailySignups.map(([, count]) => count), 1);
     }, [userStats.dailySignups]);
 
+    const maxDailyPost = useMemo(() => {
+        if (postStats.dailyPosts.length === 0) return 1;
+        return Math.max(...postStats.dailyPosts.map(([, count]) => count), 1);
+    }, [postStats.dailyPosts]);
+
 
     return (
         <div className="p-4">
             <div>
-                <h3 className="text-xl font-bold text-gray-800 mb-4">게시물 현황</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <StatCard title="총 게시물" value={`${posts.length}개`} />
+                <h3 className="text-xl font-bold text-gray-800 mb-4">종합 현황</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <StatCard title="총 사용자" value={`${userStats.totalUsers}명`} />
+                    <StatCard title="총 게시물" value={`${postStats.totalPosts}개`} />
                     <StatCard title="총 조회수" value={`${totalViews.toLocaleString()}회`} />
                     <StatCard title="총 댓글" value={`${totalComments.toLocaleString()}개`} />
                 </div>
             </div>
+
+            <div className="mt-8">
+                <h3 className="text-xl font-bold text-gray-800 mb-4">게시물 분석</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <StatCard title="오늘 게시물" value={`${postStats.todayPosts}개`} />
+                    <StatCard title="이번 주" value={`${postStats.weekPosts}개`} />
+                    <StatCard title="이번 달" value={`${postStats.monthPosts}개`} />
+                </div>
+                 <div className="mt-6 bg-white p-6 rounded-lg shadow-md border border-gray-200">
+                    <div className="flex justify-between items-center mb-4">
+                        <h4 className="text-md font-bold text-gray-700">일자별 게시물 작성 수 (최근 {postChartDays === 365 ? '1년' : `${postChartDays}일`})</h4>
+                        <PeriodSelector selectedDays={postChartDays} onSelectDays={setPostChartDays} />
+                    </div>
+                     {postStats.dailyPosts.length > 0 ? (
+                        <div className="flex items-end space-x-2 h-40 overflow-x-auto pb-4">
+                            {postStats.dailyPosts.map(([date, count]) => {
+                                const barHeight = (count / maxDailyPost) * 100;
+                                const [, month, day] = date.split('-');
+                                return (
+                                    <div key={date} className="flex flex-col items-center flex-shrink-0 w-10" title={`${date}: ${count}개`}>
+                                        <div className="text-xs font-bold text-gray-700">{count}</div>
+                                        <div className="w-4 bg-green-200 rounded-t-sm hover:bg-green-500 transition-colors" style={{ height: `${barHeight}%` }}></div>
+                                        <div className="text-xs text-gray-500 mt-1">{postChartDays > 30 ? `${month}/${day}` : `${day}일`}</div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        <p className="text-sm text-gray-500 text-center py-8">게시물 데이터가 없습니다.</p>
+                    )}
+                </div>
+            </div>
+
              <div className="mt-8">
                 <h3 className="text-xl font-bold text-gray-800 mb-4">사용자 유입 분석</h3>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <StatCard title="총 사용자" value={`${userStats.totalUsers}명`} />
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <StatCard title="오늘 가입" value={`${userStats.todaySignups}명`} />
                     <StatCard title="이번 주 가입" value={`${userStats.weekSignups}명`} />
                     <StatCard title="이번 달 가입" value={`${userStats.monthSignups}명`} />
                 </div>
                 <div className="mt-6 bg-white p-6 rounded-lg shadow-md border border-gray-200">
-                    <h4 className="text-md font-bold text-gray-700 mb-4">일자별 가입 현황 (최근 15일)</h4>
+                    <div className="flex justify-between items-center mb-4">
+                        <h4 className="text-md font-bold text-gray-700">일자별 가입 현황 (최근 {userChartDays === 365 ? '1년' : `${userChartDays}일`})</h4>
+                        <PeriodSelector selectedDays={userChartDays} onSelectDays={setUserChartDays} />
+                    </div>
                     {userStats.dailySignups.length > 0 ? (
                         <div className="flex items-end space-x-2 h-40 overflow-x-auto pb-4">
                             {userStats.dailySignups.map(([date, count]) => {
                                 const barHeight = (count / maxDailySignup) * 100;
-                                const [, , day] = date.split('-');
+                                const [, month, day] = date.split('-');
                                 return (
                                     <div key={date} className="flex flex-col items-center flex-shrink-0 w-10" title={`${date}: ${count}명`}>
                                         <div className="text-xs font-bold text-gray-700">{count}</div>
                                         <div className="w-4 bg-[#ffc2aa] rounded-t-sm hover:bg-[#ff5710] transition-colors" style={{ height: `${barHeight}%` }}></div>
-                                        <div className="text-xs text-gray-500 mt-1">{`${day}일`}</div>
+                                        <div className="text-xs text-gray-500 mt-1">{userChartDays > 30 ? `${month}/${day}`: `${day}일`}</div>
                                     </div>
                                 );
                             })}
