@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { Post, Announcement, User, Advertisement } from '../types';
 import PowerIcon from './icons/PowerIcon';
 import ImageIcon from './icons/ImageIcon';
@@ -661,30 +661,33 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const [viewingAnnouncement, setViewingAnnouncement] = useState<Announcement | null>(null);
   const [dailyStats, setDailyStats] = useState<{ [key: string]: number }>({});
   
-  useEffect(() => {
-    const fetchStats = async () => {
-        try {
-            const today = new Date();
-            const yearAgo = new Date();
-            yearAgo.setDate(today.getDate() - 365);
-            
-            const startDateStr = yearAgo.toISOString().split('T')[0];
-            
-            const statsRef = collection(db, 'dailyStats');
-            const q = query(statsRef, where(documentId(), '>=', startDateStr), orderBy(documentId(), 'desc'));
-            
-            const querySnapshot = await getDocs(q);
-            const statsData: { [key: string]: number } = {};
-            querySnapshot.forEach(doc => {
-                statsData[doc.id] = doc.data().views || 0;
-            });
-            setDailyStats(statsData);
-        } catch (error) {
-            console.error("Error fetching daily stats:", error);
-        }
-    };
-    fetchStats();
+  const fetchStats = useCallback(async () => {
+    try {
+        const today = new Date();
+        const yearAgo = new Date();
+        yearAgo.setDate(today.getDate() - 365);
+        
+        const startDateStr = yearAgo.toISOString().split('T')[0];
+        
+        const statsRef = collection(db, 'dailyStats');
+        const q = query(statsRef, where(documentId(), '>=', startDateStr), orderBy(documentId(), 'desc'));
+        
+        const querySnapshot = await getDocs(q);
+        const statsData: { [key: string]: number } = {};
+        querySnapshot.forEach(doc => {
+            statsData[doc.id] = doc.data().views || 0;
+        });
+        setDailyStats(statsData);
+    } catch (error) {
+        console.error("Error fetching daily stats:", error);
+    }
   }, []);
+
+  useEffect(() => {
+    if (activeTab === 'stats') {
+      fetchStats();
+    }
+  }, [activeTab, fetchStats]);
 
   const handleSelectPost = (post: Post) => setViewingPost(post);
   const handleBackFromPost = () => setViewingPost(null);
