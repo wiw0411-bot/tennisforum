@@ -45,6 +45,15 @@ service cloud.firestore {
       );
     }
 
+    // --- Daily Statistics ---
+    match /dailyStats/{date} {
+      allow get, list: if isAdmin();
+      // Allow create for first view, update for subsequent. `set` with merge covers both.
+      // This is permissive, allowing any client to increment views, which matches
+      // the logic for individual post view counts.
+      allow write: if true;
+    }
+
     // --- Posts and Comments ---
     match /posts/{postId} {
       // [기능 변경] 비로그인 사용자도 게시물을 읽을 수 있도록 허용합니다.

@@ -387,14 +387,18 @@ const App: React.FC = () => {
     setIsCreatingPost(false);
     setEditingPost(null);
 
-    // Always attempt to update Firestore for view count
+    // Always attempt to update Firestore for view count and stats
     try {
         const postRef = doc(db, 'posts', postToSelect.id);
         updateDoc(postRef, { views: increment(1) });
+
+        const todayStr = new Date().toISOString().split('T')[0];
+        const dailyStatRef = doc(db, 'dailyStats', todayStr);
+        setDoc(dailyStatRef, { views: increment(1) }, { merge: true });
     } catch (error) {
         // Log the error but don't bother the user with an alert,
         // as the UI has already been updated and the rule change should prevent this.
-        console.error(`Firestore error (조회수 업데이트):`, error);
+        console.error(`Firestore error (조회수/통계 업데이트):`, error);
     }
   }, []);
   

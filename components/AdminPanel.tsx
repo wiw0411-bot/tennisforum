@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { Post, Announcement, User, Advertisement } from '../types';
 import PowerIcon from './icons/PowerIcon';
 import ImageIcon from './icons/ImageIcon';
@@ -8,9 +8,10 @@ import UserCircleIcon from './icons/UserCircleIcon';
 import PostDetail from './PostDetail';
 import ArrowLeftIcon from './icons/ArrowLeftIcon';
 import XIcon from './icons/XIcon';
-import { storage } from '../firebase';
+import { storage, db } from '../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { sanitizeHTML } from '../utills/sanitize';
+import { collection, query, where, orderBy, getDocs, documentId } from 'firebase/firestore';
 
 interface AdminPanelProps {
   currentUser: User | null;
@@ -58,12 +59,13 @@ const PeriodSelector: React.FC<{
 );
 
 
-const Statistics: React.FC<{ users: User[]; posts: Post[]; }> = ({ users, posts }) => {
+const Statistics: React.FC<{ users: User[]; posts: Post[]; dailyStats: { [key: string]: number } }> = ({ users, posts, dailyStats }) => {
     const totalViews = useMemo(() => posts.reduce((sum, post) => sum + post.views, 0), [posts]);
     const totalComments = useMemo(() => posts.reduce((sum, post) => sum + (post.commentCount || 0), 0), [posts]);
     
     const [userChartDays, setUserChartDays] = useState(30);
     const [postChartDays, setPostChartDays] = useState(30);
+    const [viewChartDays, setViewChartDays] = useState(30);
 
     const userStats = useMemo(() => {
         const today = new Date();
@@ -158,6 +160,36 @@ const Statistics: React.FC<{ users: User[]; posts: Post[]; }> = ({ users, posts 
             dailyPosts: sortedDailyPosts,
         };
     }, [posts, postChartDays]);
+    
+    const viewStats = useMemo(() => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const oneWeekAgo = new Date(); oneWeekAgo.setDate(oneWeekAgo.getDate() - 7); oneWeekAgo.setHours(0,0,0,0);
+        const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+
+        let todayViews = 0;
+        let weekViews = 0;
+        let monthViews = 0;
+        
+        const dailyViews: [string, number][] = [];
+        
+        for (const dateStr in dailyStats) {
+            const date = new Date(dateStr);
+            const viewCount = dailyStats[dateStr];
+
+            if (date.getTime() >= today.getTime()) todayViews += viewCount;
+            if (date.getTime() >= oneWeekAgo.getTime()) weekViews += viewCount;
+            if (date.getTime() >= startOfMonth.getTime()) monthViews += viewCount;
+            
+            dailyViews.push([dateStr, viewCount]);
+        }
+        
+        const sortedDailyViews = dailyViews
+            .sort(([dateA], [dateB]) => new Date(dateA).getTime() - new Date(dateB).getTime())
+            .slice(-viewChartDays);
+
+        return { todayViews, weekViews, monthViews, dailyViews: sortedDailyViews };
+    }, [dailyStats, viewChartDays]);
 
     const maxDailySignup = useMemo(() => {
         if (userStats.dailySignups.length === 0) return 1;
@@ -168,6 +200,11 @@ const Statistics: React.FC<{ users: User[]; posts: Post[]; }> = ({ users, posts 
         if (postStats.dailyPosts.length === 0) return 1;
         return Math.max(...postStats.dailyPosts.map(([, count]) => count), 1);
     }, [postStats.dailyPosts]);
+
+    const maxDailyView = useMemo(() => {
+        if (viewStats.dailyViews.length === 0) return 1;
+        return Math.max(...viewStats.dailyViews.map(([, count]) => count), 1);
+    }, [viewStats.dailyViews]);
 
 
     return (
@@ -182,6 +219,38 @@ const Statistics: React.FC<{ users: User[]; posts: Post[]; }> = ({ users, posts 
                 </div>
             </div>
 
+            <div className="mt-8">
+                <h3 className="text-xl font-bold text-gray-800 mb-4">조회수 분석</h3>
+                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <StatCard title="오늘 조회수" value={`${viewStats.todayViews.toLocaleString()}회`} />
+                    <StatCard title="이번 주" value={`${viewStats.weekViews.toLocaleString()}회`} />
+                    <StatCard title="이번 달" value={`${viewStats.monthViews.toLocaleString()}회`} />
+                </div>
+                 <div className="mt-6 bg-white p-6 rounded-lg shadow-md border border-gray-200">
+                    <div className="flex justify-between items-center mb-4">
+                        <h4 className="text-md font-bold text-gray-700">일자별 조회수 (최근 {viewChartDays === 365 ? '1년' : `${viewChartDays}일`})</h4>
+                        <PeriodSelector selectedDays={viewChartDays} onSelectDays={setViewChartDays} />
+                    </div>
+                     {viewStats.dailyViews.length > 0 ? (
+                        <div className="flex items-end space-x-2 h-40 overflow-x-auto pb-4">
+                            {viewStats.dailyViews.map(([date, count]) => {
+                                const barHeight = (count / maxDailyView) * 100;
+                                const [, month, day] = date.split('-');
+                                return (
+                                    <div key={date} className="flex flex-col items-center flex-shrink-0 w-10" title={`${date}: ${count}회`}>
+                                        <div className="text-xs font-bold text-gray-700">{count}</div>
+                                        <div className="w-4 bg-purple-200 rounded-t-sm hover:bg-purple-500 transition-colors" style={{ height: `${barHeight}%` }}></div>
+                                        <div className="text-xs text-gray-500 mt-1">{viewChartDays > 30 ? `${month}/${day}` : `${day}일`}</div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    ) : (
+                        <p className="text-sm text-gray-500 text-center py-8">조회수 데이터가 없습니다.</p>
+                    )}
+                </div>
+            </div>
+            
             <div className="mt-8">
                 <h3 className="text-xl font-bold text-gray-800 mb-4">게시물 분석</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -590,6 +659,32 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const [activeTab, setActiveTab] = useState<'stats' | 'users' | 'posts' | 'announcements' | 'ads'>('stats');
   const [viewingPost, setViewingPost] = useState<Post | null>(null);
   const [viewingAnnouncement, setViewingAnnouncement] = useState<Announcement | null>(null);
+  const [dailyStats, setDailyStats] = useState<{ [key: string]: number }>({});
+  
+  useEffect(() => {
+    const fetchStats = async () => {
+        try {
+            const today = new Date();
+            const yearAgo = new Date();
+            yearAgo.setDate(today.getDate() - 365);
+            
+            const startDateStr = yearAgo.toISOString().split('T')[0];
+            
+            const statsRef = collection(db, 'dailyStats');
+            const q = query(statsRef, where(documentId(), '>=', startDateStr), orderBy(documentId(), 'desc'));
+            
+            const querySnapshot = await getDocs(q);
+            const statsData: { [key: string]: number } = {};
+            querySnapshot.forEach(doc => {
+                statsData[doc.id] = doc.data().views || 0;
+            });
+            setDailyStats(statsData);
+        } catch (error) {
+            console.error("Error fetching daily stats:", error);
+        }
+    };
+    fetchStats();
+  }, []);
 
   const handleSelectPost = (post: Post) => setViewingPost(post);
   const handleBackFromPost = () => setViewingPost(null);
@@ -664,7 +759,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
       </nav>
 
       <main className="flex-grow overflow-y-auto hide-scrollbar">
-        {activeTab === 'stats' && <Statistics users={users} posts={posts} />}
+        {activeTab === 'stats' && <Statistics users={users} posts={posts} dailyStats={dailyStats} />}
         {activeTab === 'users' && <UserManagement users={users} posts={posts} />}
         {activeTab === 'posts' && <PostManagement posts={posts} onDeletePost={onDeletePost} onSelectPost={handleSelectPost} />}
         {activeTab === 'announcements' && <AnnouncementManagement announcements={announcements} onCreateAnnouncement={onCreateAnnouncement} onUpdateAnnouncement={onUpdateAnnouncement} onDeleteAnnouncement={onDeleteAnnouncement} onSelectAnnouncement={handleSelectAnnouncement} />}
